@@ -335,10 +335,6 @@
     }
   });
 
-  // Log dos filtros aplicados
-  console.log('Filtros aplicados:', filters);
-  console.log('Operador:', op);
-
   // Definir a função de filtragem personalizada
   $.fn.dataTable.ext.search.push(
     function (settings, data, dataIndex) {
@@ -372,8 +368,6 @@
   // Redesenhar a tabela para aplicar o filtro
   table.draw();
 
-  // Log do número de registros filtrados
-  console.log('Registros filtrados:', table.rows({ filter: 'applied' }).count());
 
   // Remover a função de filtragem personalizada após a aplicação
   $.fn.dataTable.ext.search.pop();
