@@ -6,7 +6,7 @@ O script executa as tarefas de forma **paralela**, respeitando um limite de conc
 
 ## 📋 Pré-requisitos
 
-* PowerShell 7+
+* PowerShell 5.1+
 * Módulo [Microsoft.Graph](https://learn.microsoft.com/en-us/powershell/microsoftgraph/overview)
 
   ```powershell
