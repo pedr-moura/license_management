@@ -4,167 +4,380 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Gestão de Licenças Corporativas</title>
-  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
 
   <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f7fafc;
+      color: #2d3748;
+      display: flex;
+      min-height: 100vh;
+    }
+    aside {
+      width: 80px;
+      background-color: #2b6cb0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 1.5rem 0;
+      box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+    }
+    .sidebar-link {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-decoration: none;
+      color: #edf2f7;
+      text-align: center;
+      font-size: 0.75rem;
+      line-height: 1.2;
+      transition: color 0.2s ease;
+    }
+    .sidebar-link:hover {
+      color: #fff;
+    }
+    .sidebar-link svg {
+      margin-bottom: 0.5rem;
+    }
+    .content-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background-color: #fff;
+      padding: 1rem 2rem;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #1a202c;
+    }
+    main {
+      flex: 1;
+      padding: 2rem;
+      overflow-y: auto;
+    }
+    .section-spacing {
+      margin-bottom: 2rem;
+    }
+    .grid-container {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+    @media (min-width: 768px) {
+      .grid-container-md {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .col-span-2-md {
+        grid-column: span 2;
+      }
+    }
+    @media (min-width: 1024px) {
+      .grid-container-lg {
+        grid-template-columns: 2fr 1fr;
+      }
+    }
+    .card {
+      background-color: #fff;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      transition: transform 0.2s ease;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+    }
+    .label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #4a5568;
+      margin-bottom: 0.5rem;
+    }
+    .file-input {
+      width: 100%;
+      font-size: 0.875rem;
+      color: #4a5568;
+    }
+    .file-input::-webkit-file-upload-button {
+      background-color: #e2e8f0;
+      color: #2b6cb0;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      border: none;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    .file-input::-webkit-file-upload-button:hover {
+      background-color: #cbd5e0;
+    }
+    .checkbox-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      font-size: 0.875rem;
+      color: #4a5568;
+    }
+    .checkbox {
+      height: 1.25rem;
+      width: 1.25rem;
+      border: 2px solid #e2e8f0;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: border-color 0.2s ease;
+    }
+    .checkbox:checked {
+      background-color: #2b6cb0;
+      border-color: #2b6cb0;
+    }
+    .checkbox-text {
+      margin-left: 0.5rem;
+    }
+    .button {
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 0.875rem;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    .button-gray {
+      background-color: #718096;
+    }
+    .button-gray:hover {
+      background-color: #5a667a;
+    }
+    .button-blue {
+      background-color: #2b6cb0;
+    }
+    .button-blue:hover {
+      background-color: #2c5282;
+    }
+    .button-red {
+      background-color: #e53e3e;
+    }
+    .button-red:hover {
+      background-color: #c53030;
+    }
+    .table-container {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    .table-header {
+      background-color: #edf2f7;
+    }
+    th, td {
+      padding: 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    th {
+      font-weight: 600;
+      color: #4a5568;
+    }
+    tbody tr:nth-child(even) {
+      background-color: #f7fafc;
+    }
+    tbody tr:hover {
+      background-color: #edf2f7;
+    }
+    .search-input {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      transition: border-color 0.2s ease;
+    }
+    .search-input:focus {
+      border-color: #2b6cb0;
+      outline: none;
+    }
     .both-licenses {
-      background-color: #e6f3ff; /* Azul claro para destacar */
+      background-color: #bee3f8 !important;
     }
     .alert-badge {
-      padding: 0.5rem;
-      border-radius: 0.375rem;
-      background-color: #fef2f2;
-      color: #dc2626;
+      padding: 0.75rem;
+      border-radius: 6px;
+      background-color: #fff5f5;
+      color: #e53e3e;
+      font-size: 0.875rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
     .alert-details {
       display: none;
-      margin-top: 0.5rem;
-      padding-left: 1rem;
+      margin-top: 0.75rem;
+      padding-left: 1.5rem;
+      font-size: 0.875rem;
+      color: #4a5568;
     }
     .alert-details.show {
       display: block;
     }
     .conflict {
-      background-color: #fff3cd; /* Amarelo claro para conflitos */
+      background-color: #fefcbf !important;
     }
     .dup-license {
-      background-color: #ffebee; /* Vermelho claro para duplicatas */
+      background-color: #fed7d7 !important;
+    }
+    .multi-search-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .multi-search-row select, .multi-search-row input {
+      padding: 0.5rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 0.875rem;
+    }
+    .multi-search-row button {
+      padding: 0.5rem;
+      background-color: #e2e8f0;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    .multi-search-row button:hover {
+      background-color: #cbd5e0;
     }
   </style>
 </head>
-<body class="flex h-screen bg-gray-100 text-gray-800">
+<body>
   <!-- Sidebar -->
-  <aside class="w-20 bg-indigo-600 flex flex-col justify-between p-4">
-    <a href="https://github.com/pedr-moura" target="_blank" style="
-    text-decoration: none;
-    display: flex;
-    justify-content: center;
-    flex-wrap: wrap;
-    fill: white;">
-        <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" class="bi bi-github" viewBox="0 0 16 16">
-            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/>
-          </svg>
-        <div class="text-center text-indigo-200">Pedro Moura <br>2025</div></a>
+  <aside>
+    <a href="https://github.com/pedr-moura" target="_blank" class="sidebar-link">
+      <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 16 16">
+        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/>
+      </svg>
+      Pedro Moura<br>2025
+    </a>
   </aside>
 
   <!-- Content -->
-  <div class="flex-1 flex flex-col">
+  <div class="content-container">
     <!-- Header -->
-    <header class="flex items-center justify-between bg-white shadow px-6 py-4">
-      <h1 class="text-2xl font-semibold">Gestão de Licenças</h1>
+    <header>
+      <h1>Gestão de Licenças</h1>
     </header>
 
-    <main class="flex-1 overflow-auto p-6 space-y-6">
+    <main>
       <!-- Upload & Columns Toggle -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="bg-white p-4 rounded-lg shadow">
-          <label for="jsonFile" class="block text-sm font-medium text-gray-700">Carregar JSON</label>
-          <input id="jsonFile" type="file" accept=".json" class="mt-2 w-full text-sm text-gray-500 file:bg-indigo-50 file:text-indigo-700 file:px-4 file:py-2 file:rounded-md" />
+      <div class="grid-container grid-container-md section-spacing">
+        <div class="card">
+          <label for="jsonFile" class="label">Carregar JSON</label>
+          <input id="jsonFile" type="file" accept=".json" class="file-input" />
         </div>
-        <div class="bg-white p-4 rounded-lg shadow md:col-span-2">
-          <span class="block text-sm font-medium text-gray-700 mb-2">Colunas Visíveis</span>
-          <div class="flex flex-wrap gap-4" id="colContainer">
-            <label class="inline-flex items-center">
-              <input type="checkbox" class="col-vis form-checkbox h-5 w-5 text-indigo-600" data-col="0" />
-              <span class="ml-2 text-gray-700">ID</span>
-            </label>
-            <label class="inline-flex items-center">
-              <input type="checkbox" class="col-vis form-checkbox h-5 w-5 text-indigo-600" data-col="1" checked />
-              <span class="ml-2 text-gray-700">Nome</span>
-            </label>
-            <label class="inline-flex items-center">
-              <input type="checkbox" class="col-vis form-checkbox h-5 w-5 text-indigo-600" data-col="2" checked />
-              <span class="ml-2 text-gray-700">Email</span>
-            </label>
-            <label class="inline-flex items-center">
-              <input type="checkbox" class="col-vis form-checkbox h-5 w-5 text-indigo-600" data-col="3" checked />
-              <span class="ml-2 text-gray-700">Cargo</span>
-            </label>
-            <label class="inline-flex items-center">
-              <input type="checkbox" class="col-vis form-checkbox h-5 w-5 text-indigo-600" data-col="4" />
-              <span class="ml-2 text-gray-700">Unidade</span>
-            </label>
-            <label class="inline-flex items-center">
-              <input type="checkbox" class="col-vis form-checkbox h-5 w-5 text-indigo-600" data-col="5" />
-              <span class="ml-2 text-gray-700">Telefones</span>
-            </label>
-            <label class="inline-flex items-center">
-              <input type="checkbox" class="col-vis form-checkbox h-5 w-5 text-indigo-600" data-col="6" />
-              <span class="ml-2 text-gray-700">Licenças</span>
-            </label>
+        <div class="card col-span-2-md">
+          <span class="label">Colunas Visíveis</span>
+          <div class="checkbox-container" id="colContainer">
+            <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="0" /><span class="checkbox-text">ID</span></label>
+            <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="1" checked /><span class="checkbox-text">Nome</span></label>
+            <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="2" checked /><span class="checkbox-text">Email</span></label>
+            <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="3" checked /><span class="checkbox-text">Cargo</span></label>
+            <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="4" /><span class="checkbox-text">Unidade</span></label>
+            <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="5" /><span class="checkbox-text">Telefones</span></label>
+            <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="6" /><span class="checkbox-text">Licenças</span></label>
           </div>
         </div>
       </div>
 
       <!-- Multi-Search & Alerts -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div class="col-span-2 bg-white p-4 rounded-lg shadow space-y-4">
-          <div class="flex justify-between items-center">
-            <h2 class="text-lg font-semibold text-gray-700">Pesquisa Múltipla</h2>
-            <div class="flex items-center space-x-2">
-              <label class="text-sm text-gray-600">Critério:</label>
-              <select id="multiSearchOperator" class="p-1 border rounded">
-                <option value="AND" selected>Todos (E)</option>
-                <option value="OR">Qualquer (OU)</option>
+      <div class="grid-container grid-container-lg section-spacing">
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h2 style="font-size: 1.125rem; font-weight: 600; color: #4a5568;">Pesquisa Múltipla</h2>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <label style="font-size: 0.875rem; color: #4a5568;">Comparação:</label>
+              <select id="multiSearchOperator" class="search-input">
+                <option value="AND" selected>E</option>
+                <option value="OR">OU</option>
               </select>
-              <button id="addSearchField" class="bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-500">Adicionar Filtro</button>
+              <button id="addSearchField" class="button button-blue">Adicionar Filtro</button>
             </div>
           </div>
-          <div id="multiSearchFields" class="space-y-2"></div>
-          <div id="searchCriteria" class="text-sm text-gray-600 mt-2"></div>
-          <div id="alertPanel" class="space-y-2"></div>
+          <div id="multiSearchFields"></div>
+          <div id="searchCriteria" style="font-size: 0.875rem; color: #4a5568; margin-top: 0.75rem;"></div>
+          <div id="alertPanel" style="margin-top: 0.75rem;"></div>
         </div>
 
         <!-- Action Buttons -->
-        <div class="space-y-4">
-          <button id="clearFilters" class="w-full bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-400">Limpar Filtros</button>
-          <button id="exportCsv" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-500">Exportar CSV</button>
-          <button id="exportIssues" class="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-500">Relatório de Falhas</button>
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <button id="clearFilters" class="button button-gray">Limpar Filtros</button>
+          <button id="exportCsv" class="button button-blue">Exportar CSV</button>
+          <button id="exportIssues" class="button button-red">Relatório de Falhas</button>
         </div>
       </div>
 
       <!-- DataTable -->
-      <div class="bg-white p-4 rounded-lg shadow">
-        <table id="licenseTable" class="min-w-full divide-y divide-gray-200 display stripe hover row-border compact">
-          <thead class="bg-gray-50">
+      <div class="card">
+        <table id="licenseTable" class="table-container">
+          <thead class="table-header">
             <tr>
-              <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">ID</th>
-              <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Nome</th>
-              <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Email</th>
-              <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Cargo</th>
-              <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Unidade</th>
-              <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Telefones</th>
-              <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Licenças</th>
+              <th>ID</th>
+              <th>Nome</th>
+              <th>Email</th>
+              <th>Cargo</th>
+              <th>Unidade</th>
+              <th>Telefones</th>
+              <th>Licenças</th>
             </tr>
             <tr>
-              <th><input class="w-full px-2 py-1 rounded border border-gray-300" placeholder="Busca ID" /></th>
-              <th><input class="w-full px-2 py-1 rounded border border-gray-300" placeholder="Busca Nome" /></th>
-              <th><input class="w-full px-2 py-1 rounded border border-gray-300" placeholder="Busca Email" /></th>
-              <th><input class="w-full px-2 py-1 rounded border border-gray-300" placeholder="Busca Cargo" /></th>
-              <th><input class="w-full px-2 py-1 rounded border border-gray-300" placeholder="Busca Unidade" /></th>
-              <th><input class="w-full px-2 py-1 rounded border border-gray-300" placeholder="Busca Telefones" /></th>
-              <th><input class="w-full px-2 py-1 rounded border border-gray-300" placeholder="Busca Licenças" /></th>
+              <th><input class="search-input" placeholder="Busca ID" /></th>
+              <th><input class="search-input" placeholder="Busca Nome" /></th>
+              <th><input class="search-input" placeholder="Busca Email" /></th>
+              <th><input class="search-input" placeholder="Busca Cargo" /></th>
+              <th><input class="search-input" placeholder="Busca Unidade" /></th>
+              <th><input class="search-input" placeholder="Busca Telefones" /></th>
+              <th><input class="search-input" placeholder="Busca Licenças" /></th>
             </tr>
           </thead>
-          <tbody class="bg-white divide-y divide-gray-200"></tbody>
+          <tbody></tbody>
         </table>
       </div>
     </main>
   </div>
 
   <script>
-  $(function() {
+  $(document).ready(function() {
     let table = null, allData = [], nameConflicts = new Set(), dupLicUsers = new Set();
 
     const nameKey = u => `${u.DisplayName || ''}|||${u.OfficeLocation || ''}`;
     const escapeHtml = s => typeof s === 'string' ? s.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[m]) : '';
 
     function validateJson(data) {
-      if (!Array.isArray(data)) return [];
+      if (!Array.isArray(data)) {
+        alert('JSON inválido: Deve ser um array de objetos.');
+        return [];
+      }
       return data.map((u, i) => u && typeof u === 'object' ? {
         Id: u.Id || `unknown_${i}`,
         DisplayName: u.DisplayName || 'Desconhecido',
@@ -201,8 +414,12 @@
     function renderAlerts() {
       const $p = $('#alertPanel').empty();
       if (nameConflicts.size) {
-        $p.append(`<div class="alert-badge flex justify-between items-center">
-          <button id="filterNameConflicts" class="underline">⚠️ Conflitos Nome+Unidade: ${nameConflicts.size}</button>
+        $p.append(`<div class="alert-badge">
+          <button id="filterNameConflicts" style="
+    background: none;
+    border: none;
+    color: gray;
+" class="underline">⚠️ Conflitos Nome+Unidade: ${nameConflicts.size}</button>
         </div>`);
       }
       if (dupLicUsers.size) {
@@ -213,7 +430,7 @@
           const hasPaid = u.Licenses.some(l => !l.LicenseName.toLowerCase().includes('free'));
           return `<li>${escapeHtml(u.DisplayName)} (${escapeHtml(u.OfficeLocation)}): ${escapeHtml(dups.join(', '))} — Paga: ${hasPaid ? 'Sim' : 'Não'}</li>`;
         }).join('');
-        $p.append(`<div class="alert-badge flex justify-between items-center">
+        $p.append(`<div class="alert-badge">
           ⚠️ Licenças duplicadas: ${dupLicUsers.size}
           <button class="underline toggle-details" data-target="dupDetails">Detalhes</button>
         </div>
@@ -238,10 +455,13 @@
       table = $('#licenseTable').DataTable({
         data: allData,
         deferRender: true,
-        pageLength: 50,
+        pageLength: 25,
         orderCellsTop: true,
         responsive: true,
         stateSave: true,
+        language: {
+          url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json'
+        },
         columnDefs: [
           { targets: '_all', visible: false },
           { targets: [1, 2, 3], visible: true }
@@ -297,92 +517,79 @@
         { v: 6, text: 'Licenças' }
       ];
       const $ct = $('#multiSearchFields').empty();
-      $('#addSearchField').off('click').on('click', () => {
-        const $r = $(`<div class="multi-search-row flex gap-2">
-          <select class="column-select p-1 border rounded">
+      function addSearchField() {
+        const $r = $(`<div class="multi-search-row">
+          <select class="column-select">
             ${cols.map(c => `<option value="${c.v}">${c.text}</option>`).join('')}
           </select>
-          <input class="search-input p-1 border rounded flex-1" placeholder="Termo..." />
-          <button class="remove-field px-2">✕</button>
+          <input class="search-input" placeholder="Termo..." />
+          <button class="remove-field">✕</button>
         </div>`);
         $ct.append($r);
         $r.find('.search-input').on('keyup change', applyMultiSearch);
         $r.find('.column-select').on('change', applyMultiSearch);
         $r.find('.remove-field').on('click', () => { $r.remove(); applyMultiSearch(); });
-      }).trigger('click');
+      }
+      $('#addSearchField').off('click').on('click', addSearchField);
+      addSearchField(); // Inicializa com um campo
     }
 
     function applyMultiSearch() {
-  const op = $('#multiSearchOperator').val();
-  $('#searchCriteria').text(op === 'AND' 
-    ? 'Critério: Afunilando resultados (todos os filtros devem corresponder)' 
-    : 'Critério: Expandindo resultados (qualquer filtro corresponde)');
-  if (!table) return;
+      const op = $('#multiSearchOperator').val();
+      $('#searchCriteria').text(op === 'AND' 
+        ? 'Critério: Afunilando resultados (todos os filtros devem corresponder)' 
+        : 'Critério: Expandindo resultados (qualquer filtro corresponde)');
+      if (!table) return;
 
-  // Limpa a busca global e os filtros de coluna
-  table.search('').columns().search('').draw();
+      table.search('').columns().search('').draw();
 
-  const rows = $('#multiSearchFields .multi-search-row');
-  if (rows.length === 0) return;
+      const rows = $('#multiSearchFields .multi-search-row');
+      if (rows.length === 0) return;
 
-  // Coletar todos os filtros
-  const filters = [];
-  rows.each(function () {
-    const idx = $(this).find('.column-select').val();
-    const val = $(this).find('.search-input').val().trim();
-    if (val) {
-      filters.push({ col: idx, term: val });
-    }
-  });
+      const filters = [];
+      rows.each(function () {
+        const idx = $(this).find('.column-select').val();
+        const val = $(this).find('.search-input').val().trim();
+        if (val) filters.push({ col: idx, term: val });
+      });
 
-  // Definir a função de filtragem personalizada
-  $.fn.dataTable.ext.search.push(
-    function (settings, data, dataIndex) {
-      const rowData = table.row(dataIndex).data();
-      if (op === 'OR') {
-        // Para OR, verificar se pelo menos um filtro é satisfeito
-        return filters.some(filter => {
-          if (filter.col == 6) { // Coluna de licenças
-            const licenses = rowData.Licenses.map(l => l.LicenseName).join(', ');
-            return licenses.includes(filter.term);
+      $.fn.dataTable.ext.search.push(
+        function (settings, data, dataIndex) {
+          const rowData = table.row(dataIndex).data();
+          if (op === 'OR') {
+            return filters.some(filter => {
+              if (filter.col == 6) {
+                const licenses = rowData.Licenses.map(l => l.LicenseName).join(', ');
+                return licenses.toLowerCase().includes(filter.term.toLowerCase());
+              } else {
+                const cellValue = data[filter.col] || '';
+                return cellValue.toLowerCase().includes(filter.term.toLowerCase());
+              }
+            });
           } else {
-            const cellValue = data[filter.col] || '';
-            return cellValue.toLowerCase().includes(filter.term.toLowerCase());
+            return filters.every(filter => {
+              if (filter.col == 6) {
+                const licenses = rowData.Licenses.map(l => l.LicenseName).join(', ');
+                return licenses.toLowerCase().includes(filter.term.toLowerCase());
+              } else {
+                const cellValue = data[filter.col] || '';
+                return cellValue.toLowerCase().includes(filter.term.toLowerCase());
+              }
+            });
           }
-        });
-      } else { // AND
-        // Para AND, verificar se todos os filtros são satisfeitos
-        return filters.every(filter => {
-          if (filter.col == 6) { // Coluna de licenças
-            const licenses = rowData.Licenses.map(l => l.LicenseName).join(', ');
-            return licenses.includes(filter.term);
-          } else {
-            const cellValue = data[filter.col] || '';
-            return cellValue.toLowerCase().includes(filter.term.toLowerCase());
-          }
-        });
-      }
-    }
-  );
+        }
+      );
 
-  // Redesenhar a tabela para aplicar o filtro
-  table.draw();
-
-
-  // Remover a função de filtragem personalizada após a aplicação
-  $.fn.dataTable.ext.search.pop();
-}
-    function escapeRegExp(s) {
-      return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      table.draw();
+      $.fn.dataTable.ext.search.pop();
     }
 
     $('#clearFilters').on('click', () => {
       if (!table) return;
-      $('#globalSearch').val('').trigger('input');
       $('#licenseTable thead input').val('');
       table.search('').columns().search('').draw();
       $('#multiSearchFields').empty();
-      $('#addSearchField').trigger('click');
+      setupMultiSearch();
       $('#alertPanel').empty();
       $('#colContainer .col-vis').each(function () {
         const idx = +$(this).data('col'),
@@ -393,8 +600,19 @@
       table.draw();
     });
 
-    function escapeCsv(v) { if (v == null) return ''; const s = String(v); return (/[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s); }
-    function downloadCsv(csv, fn) { const b = new Blob([csv], { type: 'text/csv' }), a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = fn; a.click(); URL.revokeObjectURL(a.href); }
+    function escapeCsv(v) {
+      if (v == null) return '';
+      const s = String(v);
+      return (/[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+    }
+    function downloadCsv(csv, fn) {
+      const b = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(b);
+      a.download = fn;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
 
     $('#exportCsv').on('click', () => {
       if (!table) return alert('Tabela não iniciada');
@@ -412,26 +630,42 @@
     $('#exportIssues').on('click', () => {
       if (!table) return alert('Tabela não iniciada');
       let lines = [];
-      if (nameConflicts.size) { lines.push(['CONFLITOS Nome+Unidade'], ['Nome', 'Unidade']); nameConflicts.forEach(k => lines.push(k.split('|||'))); lines.push([]); }
-      if (dupLicUsers.size) { lines.push(['USUÁRIOS com Licenças Duplicadas'], ['Nome', 'Unidade', 'Duplicatas', 'Paga']); allData.filter(u => dupLicUsers.has(u.Id)).forEach(u => {
-        const cnt = {}, dups = []; u.Licenses.forEach(l => cnt[l.LicenseName] = (cnt[l.LicenseName] || 0) + 1);
-        Object.entries(cnt).forEach(([l, c]) => c > 1 && dups.push(l));
-        const hasPaid = u.Licenses.some(l => !l.LicenseName.toLowerCase().includes('free'));
-        lines.push([u.DisplayName, u.OfficeLocation, dups.join('; '), hasPaid ? 'Sim' : 'Não']);
-      }); }
+      if (nameConflicts.size) {
+        lines.push(['CONFLITOS Nome+Unidade'], ['Nome', 'Unidade']);
+        nameConflicts.forEach(k => lines.push(k.split('|||')));
+        lines.push([]);
+      }
+      if (dupLicUsers.size) {
+        lines.push(['USUÁRIOS com Licenças Duplicadas'], ['Nome', 'Unidade', 'Duplicatas', 'Paga']);
+        allData.filter(u => dupLicUsers.has(u.Id)).forEach(u => {
+          const cnt = {}, dups = [];
+          u.Licenses.forEach(l => cnt[l.LicenseName] = (cnt[l.LicenseName] || 0) + 1);
+          Object.entries(cnt).forEach(([l, c]) => c > 1 && dups.push(l));
+          const hasPaid = u.Licenses.some(l => !l.LicenseName.toLowerCase().includes('free'));
+          lines.push([u.DisplayName, u.OfficeLocation, dups.join('; '), hasPaid ? 'Sim' : 'Não']);
+        });
+      }
       if (!lines.length) return alert('Nenhuma falha detectada.');
       downloadCsv(lines.map(r => r.map(escapeCsv).join(',')).join('\n'), 'relatorio_falhas.csv');
     });
 
     $('#jsonFile').on('change', e => {
-      const f = e.target.files[0]; if (!f) return;
-      const fr = new FileReader(); fr.onload = () => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const fr = new FileReader();
+      fr.onload = () => {
         try {
-          const d = JSON.parse(fr.result), v = validateJson(d);
-          if (!v.length) return alert('Nenhum usuário válido.');
+          const d = JSON.parse(fr.result);
+          const v = validateJson(d);
+          if (!v.length) {
+            alert('Nenhum usuário válido encontrado no JSON.');
+            return;
+          }
           initTable(v);
           setupMultiSearch();
-        } catch (er) { alert('Erro ao processar JSON: ' + er.message); }
+        } catch (er) {
+          alert('Erro ao processar JSON: ' + er.message);
+        }
       };
       fr.readAsText(f);
     });
