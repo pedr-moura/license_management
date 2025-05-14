@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestão de Licenças Corporativas</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css" />
+
+  <style>
+    .both-licenses {
+      background-color: #e6f3ff; /* Azul claro para destacar */
+    }
+    .alert-badge {
+      padding: 0.5rem;
+      border-radius: 0.375rem;
+      background-color: #fef2f2;
+      color: #dc2626;
+    }
+    .alert-details {
+      display: none;
+      margin-top: 0.5rem;
+      padding-left: 1rem;
+    }
+    .alert-details.show {
+      display: block;
+    }
+    .conflict {
+      background-color: #fff3cd; /* Amarelo claro para conflitos */
+    }
+    .dup-license {
+      background-color: #ffebee; /* Vermelho claro para duplicatas */
+    }
+  </style>
+</head>
+<body class="flex h-screen bg-gray-100 text-gray-800">
+  <!-- Sidebar -->
+  <aside class="w-20 bg-indigo-600 flex flex-col justify-between p-4">
+    <div class="space-y-6 text-indigo-200">
+      <button class="w-full p-2 bg-indigo-500 rounded-lg hover:bg-indigo-400"><i class="fas fa-th-large text-xl"></i></button>
+      <button class="w-full p-2 bg-indigo-500/70 rounded-lg hover:bg-indigo-500"><i class="fas fa-table text-xl"></i></button>
+      <button class="w-full p-2 bg-indigo-500/70 rounded-lg hover:bg-indigo-500"><i class="fas fa-bell text-xl"></i></button>
+      <button class="w-full p-2 bg-indigo-500/70 rounded-lg hover:bg-indigo-500"><i class="fas fa-cog text-xl"></i></button>
+    </div>
+    <div class="text-center text-indigo-200">© 2025</div>
+  </aside>
+
+  <!-- Content -->
+  <div class="flex-1 flex flex-col">
+    <!-- Header -->
+    <header class="flex items-center justify-between bg-white shadow px-6 py-4">
+      <h1 class="text-2xl font-semibold">Gestão de Licenças</h1>
+      <div class="flex items-center space-x-4">
+        <div class="relative">
+          <input id="globalSearch" type="search" placeholder="Buscar..." class="w-64 pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+        </div>
+        <i class="fas fa-user-circle text-gray-400 text-2xl"></i>
+      </div>
+    </header>
+
+    <main class="flex-1 overflow-auto p-6 space-y-6">
+      <!-- Upload & Columns Toggle -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-white p-4 rounded-lg shadow">
+          <label for="jsonFile" class="block text-sm font-medium text-gray-700">Carregar JSON</label>
+          <input id="jsonFile" type="file" accept=".json" class="mt-2 w-full text-sm text-gray-500 file:bg-indigo-50 file:text-indigo-700 file:px-4 file:py-2 file:rounded-md" />
+        </div>
+        <div class="bg-white p-4 rounded-lg shadow md:col-span-2">
+          <span class="block text-sm font-medium text-gray-700 mb-2">Colunas Visíveis</span>
+          <div class="flex flex-wrap gap-4" id="colContainer">
+            <label class="inline-flex items-center">
+              <input type="checkbox" class="col-vis form-checkbox h-5 w-5 text-indigo-600" data-col="0" />
+              <span class="ml-2 text-gray-700">ID</span>
+            </label>
+            <label class="inline-flex items-center">
+              <input type="checkbox" class="col-vis form-checkbox h-5 w-5 text-indigo-600" data-col="1" checked />
+              <span class="ml-2 text-gray-700">Nome</span>
+            </label>
+            <label class="inline-flex items-center">
+              <input type="checkbox" class="col-vis form-checkbox h-5 w-5 text-indigo-600" data-col="2" checked />
+              <span class="ml-2 text-gray-700">Email</span>
+            </label>
+            <label class="inline-flex items-center">
+              <input type="checkbox" class="col-vis form-checkbox h-5 w-5 text-indigo-600" data-col="3" checked />
+              <span class="ml-2 text-gray-700">Cargo</span>
+            </label>
+            <label class="inline-flex items-center">
+              <input type="checkbox" class="col-vis form-checkbox h-5 w-5 text-indigo-600" data-col="4" />
+              <span class="ml-2 text-gray-700">Unidade</span>
+            </label>
+            <label class="inline-flex items-center">
+              <input type="checkbox" class="col-vis form-checkbox h-5 w-5 text-indigo-600" data-col="5" />
+              <span class="ml-2 text-gray-700">Telefones</span>
+            </label>
+            <label class="inline-flex items-center">
+              <input type="checkbox" class="col-vis form-checkbox h-5 w-5 text-indigo-600" data-col="6" />
+              <span class="ml-2 text-gray-700">Licenças</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Multi-Search & Alerts -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="col-span-2 bg-white p-4 rounded-lg shadow space-y-4">
+          <div class="flex justify-between items-center">
+            <h2 class="text-lg font-semibold text-gray-700">Pesquisa Múltipla</h2>
+            <div class="flex items-center space-x-2">
+              <label class="text-sm text-gray-600">Critério:</label>
+              <select id="multiSearchOperator" class="p-1 border rounded">
+                <option value="AND" selected>Todos (E)</option>
+                <option value="OR">Qualquer (OU)</option>
+              </select>
+              <button id="addSearchField" class="bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-500">Adicionar Filtro</button>
+            </div>
+          </div>
+          <div id="multiSearchFields" class="space-y-2"></div>
+          <div id="searchCriteria" class="text-sm text-gray-600 mt-2"></div>
+          <div id="alertPanel" class="space-y-2"></div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="space-y-4">
+          <button id="clearFilters" class="w-full bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-400">Limpar Filtros</button>
+          <button id="exportCsv" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-500">Exportar CSV</button>
+          <button id="exportIssues" class="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-500">Relatório de Falhas</button>
+        </div>
+      </div>
+
+      <!-- DataTable -->
+      <div class="bg-white p-4 rounded-lg shadow">
+        <table id="licenseTable" class="min-w-full divide-y divide-gray-200 display stripe hover row-border compact">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">ID</th>
+              <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Nome</th>
+              <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Email</th>
+              <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Cargo</th>
+              <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Unidade</th>
+              <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Telefones</th>
+              <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Licenças</th>
+            </tr>
+            <tr>
+              <th><input class="w-full px-2 py-1 rounded border border-gray-300" placeholder="Busca ID" /></th>
+              <th><input class="w-full px-2 py-1 rounded border border-gray-300" placeholder="Busca Nome" /></th>
+              <th><input class="w-full px-2 py-1 rounded border border-gray-300" placeholder="Busca Email" /></th>
+              <th><input class="w-full px-2 py-1 rounded border border-gray-300" placeholder="Busca Cargo" /></th>
+              <th><input class="w-full px-2 py-1 rounded border border-gray-300" placeholder="Busca Unidade" /></th>
+              <th><input class="w-full px-2 py-1 rounded border border-gray-300" placeholder="Busca Telefones" /></th>
+              <th><input class="w-full px-2 py-1 rounded border border-gray-300" placeholder="Busca Licenças" /></th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <script>
+  $(function() {
+    let table = null, allData = [], nameConflicts = new Set(), dupLicUsers = new Set();
+
+    const nameKey = u => `${u.DisplayName || ''}|||${u.OfficeLocation || ''}`;
+    const escapeHtml = s => typeof s === 'string' ? s.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[m]) : '';
+
+    function validateJson(data) {
+      if (!Array.isArray(data)) return [];
+      return data.map((u, i) => u && typeof u === 'object' ? {
+        Id: u.Id || `unknown_${i}`,
+        DisplayName: u.DisplayName || 'Desconhecido',
+        OfficeLocation: u.OfficeLocation || 'Desconhecido',
+        Email: u.Email || '',
+        JobTitle: u.JobTitle || '',
+        BusinessPhones: Array.isArray(u.BusinessPhones) ? u.BusinessPhones : [],
+        Licenses: Array.isArray(u.Licenses) ? u.Licenses.map(l => ({
+          LicenseName: l.LicenseName || `Lic_${i}_${Math.random().toString(36).substr(2, 5)}`,
+          SkuId: l.SkuId || ''
+        })) : []
+      } : null).filter(x => x);
+    }
+
+    function findIssues(data) {
+      const nameMap = new Map(), dupSet = new Set(), officeLic = new Set([
+        'Microsoft 365 E3', 'Microsoft 365 E5',
+        'Microsoft 365 Business Standard', 'Microsoft 365 Business Premium',
+        'Office 365 E3', 'Office 365 E5'
+      ]);
+      data.forEach(u => {
+        const k = nameKey(u);
+        nameMap.set(k, (nameMap.get(k) || 0) + 1);
+        const cnt = new Map();
+        u.Licenses.forEach(l => {
+          const base = l.LicenseName.match(/^(Microsoft 365|Office 365)/)?.[0] || l.LicenseName;
+          cnt.set(base, (cnt.get(base) || 0) + 1);
+        });
+        if ([...cnt].some(([lic, c]) => officeLic.has(lic) && c > 1)) dupSet.add(u.Id);
+      });
+      return { nameConflicts: new Set([...nameMap].filter(([, c]) => c > 1).map(([k]) => k)), dupLicUsers: dupSet };
+    }
+
+    function renderAlerts() {
+      const $p = $('#alertPanel').empty();
+      if (nameConflicts.size) {
+        $p.append(`<div class="alert-badge flex justify-between items-center">
+          <button id="filterNameConflicts" class="underline">⚠️ Conflitos Nome+Unidade: ${nameConflicts.size}</button>
+        </div>`);
+      }
+      if (dupLicUsers.size) {
+        const list = allData.filter(u => dupLicUsers.has(u.Id)).map(u => {
+          const cnt = {}, dups = [];
+          u.Licenses.forEach(l => cnt[l.LicenseName] = (cnt[l.LicenseName] || 0) + 1);
+          Object.entries(cnt).forEach(([lic, c]) => c > 1 && dups.push(lic));
+          const hasPaid = u.Licenses.some(l => !l.LicenseName.toLowerCase().includes('free'));
+          return `<li>${escapeHtml(u.DisplayName)} (${escapeHtml(u.OfficeLocation)}): ${escapeHtml(dups.join(', '))} — Paga: ${hasPaid ? 'Sim' : 'Não'}</li>`;
+        }).join('');
+        $p.append(`<div class="alert-badge flex justify-between items-center">
+          ⚠️ Licenças duplicadas: ${dupLicUsers.size}
+          <button class="underline toggle-details" data-target="dupDetails">Detalhes</button>
+        </div>
+        <div id="dupDetails" class="alert-details"><ul>${list}</ul></div>`);
+      }
+      $('#filterNameConflicts').off('click').on('click', () => {
+        const ids = allData.filter(u => nameConflicts.has(nameKey(u))).map(u => u.Id);
+        table.columns().search('').draw();
+        table.column(0).search(ids.join('|'), true, false).draw();
+      });
+      $('.toggle-details').off('click').on('click', function () {
+        const tgt = $(this).data('target');
+        $(`#${tgt}`).toggleClass('show');
+        $(this).text($(`#${tgt}`).hasClass('show') ? 'Ocultar' : 'Detalhes');
+      });
+    }
+
+    function initTable(data) {
+      allData = data;
+      ({ nameConflicts, dupLicUsers } = findIssues(allData));
+      if (table) table.destroy();
+      table = $('#licenseTable').DataTable({
+        data: allData,
+        deferRender: true,
+        pageLength: 50,
+        orderCellsTop: true,
+        responsive: true,
+        stateSave: true,
+        columnDefs: [
+          { targets: '_all', visible: false },
+          { targets: [1, 2, 3], visible: true }
+        ],
+        columns: [
+          { data: 'Id' },
+          { data: 'DisplayName' },
+          { data: 'Email' },
+          { data: 'JobTitle' },
+          { data: 'OfficeLocation' },
+          { data: 'BusinessPhones', render: p => Array.isArray(p) ? p.join('; ') : p },
+          { data: 'Licenses', render: l => Array.isArray(l) ? l.map(x => x.LicenseName).join(', ') : '' }
+        ],
+        initComplete: function () {
+          const api = this.api();
+          api.columns().every(function (i) {
+            $('input', this.header()).on('keyup change clear', function () {
+              api.column(i).search(this.value).draw();
+            });
+          });
+          $('#colContainer .col-vis').each(function () {
+            const idx = +$(this).data('col');
+            $(this).prop('checked', api.column(idx).visible());
+          });
+          $('.col-vis').off('change').on('change', function () {
+            const col = api.column($(this).data('col'));
+            col.visible(!col.visible());
+          });
+        },
+        rowCallback: function (r, u) {
+          if (nameConflicts.has(nameKey(u))) $(r).addClass('conflict');
+          if (dupLicUsers.has(u.Id)) $(r).addClass('dup-license');
+          const licenses = u.Licenses.map(l => l.LicenseName);
+          const searchLicenses = $('#multiSearchFields .multi-search-row')
+            .filter(function () { return $(this).find('.column-select').val() == 6; })
+            .find('.search-input').map(function () { return $(this).val().trim(); }).get();
+          if (searchLicenses.length > 1 && $('#multiSearchOperator').val() === 'AND' && searchLicenses.every(lic => licenses.includes(lic))) {
+            $(r).addClass('both-licenses');
+          }
+        },
+        drawCallback: renderAlerts
+      });
+    }
+
+    function setupMultiSearch() {
+      const cols = [
+        { v: 0, text: 'ID' },
+        { v: 1, text: 'Nome' },
+        { v: 2, text: 'Email' },
+        { v: 3, text: 'Cargo' },
+        { v: 4, text: 'Unidade' },
+        { v: 5, text: 'Telefones' },
+        { v: 6, text: 'Licenças' }
+      ];
+      const $ct = $('#multiSearchFields').empty();
+      $('#addSearchField').off('click').on('click', () => {
+        const $r = $(`<div class="multi-search-row flex gap-2">
+          <select class="column-select p-1 border rounded">
+            ${cols.map(c => `<option value="${c.v}">${c.text}</option>`).join('')}
+          </select>
+          <input class="search-input p-1 border rounded flex-1" placeholder="Termo..." />
+          <button class="remove-field px-2">✕</button>
+        </div>`);
+        $ct.append($r);
+        $r.find('.search-input').on('keyup change', applyMultiSearch);
+        $r.find('.column-select').on('change', applyMultiSearch);
+        $r.find('.remove-field').on('click', () => { $r.remove(); applyMultiSearch(); });
+      }).trigger('click');
+    }
+
+    function applyMultiSearch() {
+  const op = $('#multiSearchOperator').val();
+  $('#searchCriteria').text(op === 'AND' 
+    ? 'Critério: Afunilando resultados (todos os filtros devem corresponder)' 
+    : 'Critério: Expandindo resultados (qualquer filtro corresponde)');
+  if (!table) return;
+
+  // Limpa a busca global e os filtros de coluna
+  table.search('').columns().search('').draw();
+
+  const rows = $('#multiSearchFields .multi-search-row');
+  if (rows.length === 0) return;
+
+  // Coletar todos os filtros
+  const filters = [];
+  rows.each(function () {
+    const idx = $(this).find('.column-select').val();
+    const val = $(this).find('.search-input').val().trim();
+    if (val) {
+      filters.push({ col: idx, term: val });
+    }
+  });
+
+  // Log dos filtros aplicados
+  console.log('Filtros aplicados:', filters);
+  console.log('Operador:', op);
+
+  // Definir a função de filtragem personalizada
+  $.fn.dataTable.ext.search.push(
+    function (settings, data, dataIndex) {
+      const rowData = table.row(dataIndex).data();
+      if (op === 'OR') {
+        // Para OR, verificar se pelo menos um filtro é satisfeito
+        return filters.some(filter => {
+          if (filter.col == 6) { // Coluna de licenças
+            const licenses = rowData.Licenses.map(l => l.LicenseName).join(', ');
+            return licenses.includes(filter.term);
+          } else {
+            const cellValue = data[filter.col] || '';
+            return cellValue.toLowerCase().includes(filter.term.toLowerCase());
+          }
+        });
+      } else { // AND
+        // Para AND, verificar se todos os filtros são satisfeitos
+        return filters.every(filter => {
+          if (filter.col == 6) { // Coluna de licenças
+            const licenses = rowData.Licenses.map(l => l.LicenseName).join(', ');
+            return licenses.includes(filter.term);
+          } else {
+            const cellValue = data[filter.col] || '';
+            return cellValue.toLowerCase().includes(filter.term.toLowerCase());
+          }
+        });
+      }
+    }
+  );
+
+  // Redesenhar a tabela para aplicar o filtro
+  table.draw();
+
+  // Log do número de registros filtrados
+  console.log('Registros filtrados:', table.rows({ filter: 'applied' }).count());
+
+  // Remover a função de filtragem personalizada após a aplicação
+  $.fn.dataTable.ext.search.pop();
+}
+    function escapeRegExp(s) {
+      return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    $('#clearFilters').on('click', () => {
+      if (!table) return;
+      $('#globalSearch').val('').trigger('input');
+      $('#licenseTable thead input').val('');
+      table.search('').columns().search('').draw();
+      $('#multiSearchFields').empty();
+      $('#addSearchField').trigger('click');
+      $('#alertPanel').empty();
+      $('#colContainer .col-vis').each(function () {
+        const idx = +$(this).data('col'),
+          vis = [1, 2, 3].includes(idx);
+        table.column(idx).visible(vis);
+        $(this).prop('checked', vis);
+      });
+      table.draw();
+    });
+
+    function escapeCsv(v) { if (v == null) return ''; const s = String(v); return (/[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s); }
+    function downloadCsv(csv, fn) { const b = new Blob([csv], { type: 'text/csv' }), a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = fn; a.click(); URL.revokeObjectURL(a.href); }
+
+    $('#exportCsv').on('click', () => {
+      if (!table) return alert('Tabela não iniciada');
+      const data = table.rows({ filter: 'applied' }).data().toArray();
+      if (!data.length) return alert('Nenhum registro filtrado.');
+      const hdr = ['Id', 'Nome', 'Email', 'Cargo', 'Unidade', 'Telefones', 'Licenças'];
+      const rows = data.map(u => [
+        u.Id, u.DisplayName, u.Email, u.JobTitle, u.OfficeLocation,
+        Array.isArray(u.BusinessPhones) ? u.BusinessPhones.join('; ') : u.BusinessPhones || '',
+        Array.isArray(u.Licenses) ? u.Licenses.map(x => x.LicenseName).join(', ') : ''
+      ]);
+      downloadCsv([hdr, ...rows].map(r => r.map(escapeCsv).join(',')).join('\n'), 'relatorio.csv');
+    });
+
+    $('#exportIssues').on('click', () => {
+      if (!table) return alert('Tabela não iniciada');
+      let lines = [];
+      if (nameConflicts.size) { lines.push(['CONFLITOS Nome+Unidade'], ['Nome', 'Unidade']); nameConflicts.forEach(k => lines.push(k.split('|||'))); lines.push([]); }
+      if (dupLicUsers.size) { lines.push(['USUÁRIOS com Licenças Duplicadas'], ['Nome', 'Unidade', 'Duplicatas', 'Paga']); allData.filter(u => dupLicUsers.has(u.Id)).forEach(u => {
+        const cnt = {}, dups = []; u.Licenses.forEach(l => cnt[l.LicenseName] = (cnt[l.LicenseName] || 0) + 1);
+        Object.entries(cnt).forEach(([l, c]) => c > 1 && dups.push(l));
+        const hasPaid = u.Licenses.some(l => !l.LicenseName.toLowerCase().includes('free'));
+        lines.push([u.DisplayName, u.OfficeLocation, dups.join('; '), hasPaid ? 'Sim' : 'Não']);
+      }); }
+      if (!lines.length) return alert('Nenhuma falha detectada.');
+      downloadCsv(lines.map(r => r.map(escapeCsv).join(',')).join('\n'), 'relatorio_falhas.csv');
+    });
+
+    $('#jsonFile').on('change', e => {
+      const f = e.target.files[0]; if (!f) return;
+      const fr = new FileReader(); fr.onload = () => {
+        try {
+          const d = JSON.parse(fr.result), v = validateJson(d);
+          if (!v.length) return alert('Nenhum usuário válido.');
+          initTable(v);
+          setupMultiSearch();
+        } catch (er) { alert('Erro ao processar JSON: ' + er.message); }
+      };
+      fr.readAsText(f);
+    });
+  });
+  </script>
+</body>
+</html>
