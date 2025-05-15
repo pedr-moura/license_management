@@ -184,6 +184,13 @@ $simpleHtmlContent = @"
     <link rel="stylesheet" href="https://lic-management.vercel.app/style.css">
 </head>
 <body>
+
+<div id="loadingOverlay" style="display: none;">
+  <div class="loader-content">
+    <p>Loading...</p>
+    </div>
+</div>
+
     <script>
         // PowerShell will replace $json with actual user data
         const userData = $json; 
