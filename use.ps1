@@ -260,15 +260,6 @@ $simpleHtmlContent = @"
                             <th>Phones</th>
                             <th>Licenses</th>
                         </tr>
-                        <tr>
-                            <th><input class="search-input" placeholder="ID..." /></th>
-                            <th><input class="search-input" placeholder="Name..." /></th>
-                            <th><input class="search-input" placeholder="Email..." /></th>
-                            <th><input class="search-input" placeholder="Job Title..." /></th>
-                            <th><input class="search-input" placeholder="Department..." /></th>
-                            <th><input class="search-input" placeholder="Phones..." /></th>
-                            <th><input class="search-input" placeholder="Licenses..." /></th>
-                        </tr>
                     </thead>
                     <tbody></tbody>
                 </table>
