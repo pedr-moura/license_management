@@ -263,7 +263,7 @@ $(document).ready(function() {
                 <input type="text" class="custom-dropdown-text-input" autocomplete="off" />
                 <div class="custom-options-list" style="display:none;"></div>
             </div>
-            <select class="search-value-select" style="display: none;"></select> {/* ESTE DEVE ESTAR SEMPRE OCULTO */}
+            <select class="search-value-select" style="display: none;"></select>
 
             <button class="remove-field" title="Remover filtro"><i class="fas fa-trash-alt"></i></button>
         </div>
