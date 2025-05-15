@@ -65,7 +65,7 @@ foreach ($skuId in $skuIdMap.Keys) {
         $jobs = Get-Job # Refresh job list
     }
 
-    $jobs += Start-ThreadJob -Name "GetUsers_$($skuName -replace '\W','_')" -ScriptBlock { # Made job name more robust
+    $jobs += Start-ThreadJob -Name "GetUsers_$($skuName -replace '\W','_')" -ScriptBlock {
         param($skuIdParam, $skuNameParam)
         
         $mgUserParams = @{
