@@ -101,7 +101,7 @@ foreach ($skuId in $skuIdMap.Keys) {
     Write-Host "Task started for license '$skuName'" -ForegroundColor DarkCyan
 }
 
-Write-Host "⏳ Waiting for tasks to complete..." -ForegroundColor Cyan
+Write-Host "Waiting for tasks to complete..." -ForegroundColor Cyan
 $jobs | Wait-Job # Wait for all started jobs to finish
 
 # Collect results from completed jobs
@@ -297,7 +297,7 @@ else {
 # Save the HTML file
 try {
     $simpleHtmlContent | Out-File -FilePath $ReportHtmlPath -Encoding UTF8 -ErrorAction Stop
-    Write-Host "✅ Report saved to: $ReportHtmlPath" -ForegroundColor Green
+    Write-Host "Report saved to: $ReportHtmlPath" -ForegroundColor Green
 }
 catch {
     Write-Error "Failed to save the HTML report file: $($_.Exception.Message)" 
