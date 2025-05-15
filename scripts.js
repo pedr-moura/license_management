@@ -251,7 +251,7 @@ $(document).ready(function() {
                         <input type="text" class="custom-dropdown-text-input" autocomplete="off" />
                         <div class="custom-options-list"></div>
                     </div>
-                    <input type="hidden" class="search-value-input" /> {/* CHANGED: to input type="hidden" */}
+                    <input type="hidden" class="search-value-input" /> 
                     <button class="remove-field" title="Remove filter"><i class="fas fa-trash-alt"></i></button>
                 </div>
             `);
