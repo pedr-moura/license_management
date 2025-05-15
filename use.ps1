@@ -1,5 +1,5 @@
 try {
-    Connect-MgGraph -Scopes User.Read.All
+    Connect-MgGraph -Scopes User.Read.All -NoWelcome
     Write-Host "Successfully connected to Microsoft Graph." -ForegroundColor Green
 }
 catch {
