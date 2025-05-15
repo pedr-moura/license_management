@@ -1,41 +1,43 @@
-# 🔍 Listagem de Usuários e Licenças do Microsoft 365 via Microsoft Graph
+# 🔍 Listing Microsoft 365 Users and Licenses via Microsoft Graph
 
-Este script PowerShell conecta-se ao Microsoft Graph, consulta todos os usuários que possuem licenças ativas no tenant e agrupa os resultados por usuário, exibindo informações detalhadas como nome, e-mail, telefone, local de trabalho e as licenças atribuídas.
+This PowerShell script connects to Microsoft Graph, queries all users with active licenses in the tenant, and groups the results by user, displaying detailed information such as name, email, phone, office location, and assigned licenses.
 
-O script executa as tarefas de forma **paralela**, respeitando um limite de concorrência, para otimizar o tempo de execução sem sobrecarregar o sistema.
+The script performs tasks in **parallel**, respecting a concurrency limit to optimize execution time without overloading the system.
 
-## 📋 Pré-requisitos
+## 📋 Prerequisites
 
 * PowerShell 5.1+
-* Módulo [Microsoft.Graph](https://learn.microsoft.com/en-us/powershell/microsoftgraph/overview)
+
+* [Microsoft.Graph](https://learn.microsoft.com/en-us/powershell/microsoftgraph/overview) module:
 
   ```powershell
   Install-Module Microsoft.Graph -Scope CurrentUser
   ```
-* Permissões delegadas ou de aplicativo:
+
+* Delegated or application permissions:
 
   * `User.Read.All`
 
-## 🚀 Como usar
+## 🚀 How to Use
 
-1. Autentique-se no Microsoft Graph com o escopo necessário:
+1. Authenticate to Microsoft Graph with the required scope:
 
    ```powershell
    Connect-MgGraph -Scopes User.Read.All
    ```
 
-2. Execute o script completo abaixo.
+2. Run the full script below.
 
-3. O resultado será salvo como um arquivo JSON chamado `UsuariosComLicencas_Paralelo.json` no diretório atual.
+3. The result will be saved as a JSON file named `UsuariosComLicencas_Paralelo.json` in the current directory.
 
 ---
 
-## 💻 Script PowerShell (Exemplo)
+## 💻 PowerShell Script (Example)
 
 ```powershell
 Connect-MgGraph -Scopes User.Read.All
 
-# Exemplo fictício de mapeamento de SKUs para nomes legíveis
+# Example mapping of SKUs to human-readable names
 $skuIdMap = @{
     "SKU001" = "Microsoft 365 E3"
     "SKU002" = "Office 365 F3"
@@ -78,10 +80,10 @@ foreach ($skuId in $skuIdMap.Keys) {
         }
     } -ArgumentList $skuId, $skuName
 
-    Write-Host "Tarefa iniciada para a licença '$skuName'" -ForegroundColor DarkCyan
+    Write-Host "Task started for license '$skuName'" -ForegroundColor DarkCyan
 }
 
-Write-Host "⏳ Aguardando a finalização das tarefas…" -ForegroundColor Cyan
+Write-Host "⏳ Waiting for all tasks to complete…" -ForegroundColor Cyan
 $jobs | Wait-Job
 
 $allEntries = $jobs | Receive-Job
@@ -111,15 +113,15 @@ $json | Out-File -FilePath ".\DADOS_OBTIDOS.json" -Encoding UTF8
 
 ---
 
-## 📁 Saída (Exemplo Fictício)
+## 📁 Output (Sample)
 
 ```json
 [
   {
     "Id": "abc123",
-    "Email": "maria.silva@empresa.com",
+    "Email": "maria.silva@company.com",
     "DisplayName": "Maria Silva",
-    "JobTitle": "Analista de TI",
+    "JobTitle": "IT Analyst",
     "OfficeLocation": "São Paulo",
     "BusinessPhones": "+55 11 99999-0000",
     "Licenses": [
@@ -133,9 +135,9 @@ $json | Out-File -FilePath ".\DADOS_OBTIDOS.json" -Encoding UTF8
   },
   {
     "Id": "xyz789",
-    "Email": "joao.souza@empresa.com",
+    "Email": "joao.souza@company.com",
     "DisplayName": "João Souza",
-    "JobTitle": "Gerente de Projetos",
+    "JobTitle": "Project Manager",
     "OfficeLocation": "Rio de Janeiro",
     "BusinessPhones": "+55 21 98888-1111",
     "Licenses": [
@@ -145,3 +147,4 @@ $json | Out-File -FilePath ".\DADOS_OBTIDOS.json" -Encoding UTF8
     ]
   }
 ]
+```
