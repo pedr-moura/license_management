@@ -534,11 +534,20 @@ $(document).ready(function() {
     }
   }
 
-  $('#exportCsv').on('click', () => {
-    if (!table) return alert('Tabela não iniciada. Dados não carregados.');
+ $('#exportCsv').on('click', () => {
+    console.log("[Export CSV] Iniciando exportação de licenças...");
+    if (!table) {
+      console.log("[Export CSV] Tabela não iniciada.");
+      return alert('Tabela não iniciada. Dados não carregados.');
+    }
     
     const rowsToExport = table.rows({ search: 'applied' }).data().toArray();
-    if (!rowsToExport.length) return alert('Nenhum registro para exportar com os filtros atuais.');
+    console.log("[Export CSV] Número de linhas para exportar (após filtros):", rowsToExport.length);
+
+    if (!rowsToExport.length) {
+      console.log("[Export CSV] Nenhuma linha para exportar com filtros atuais.");
+      return alert('Nenhum registro para exportar com os filtros atuais.');
+    }
 
     const visibleColumns = [];
     table.columns(':visible').every(function() {
@@ -548,8 +557,10 @@ $(document).ready(function() {
         dataProp: table.settings()[0].aoColumns[this.index()].mData
       });
     });
+    console.log("[Export CSV] Colunas visíveis para exportação:", JSON.stringify(visibleColumns));
 
     const headerRow = visibleColumns.map(col => escapeCsvValue(col.title)).join(',');
+    console.log("[Export CSV] Linha de cabeçalho:", headerRow);
 
     const csvRows = rowsToExport.map(rowData => {
       return visibleColumns.map(col => {
@@ -576,9 +587,24 @@ $(document).ready(function() {
         return escapeCsvValue(cellData, shouldForceQuotesForSemicolon);
       }).join(',');
     });
+    // Para ver algumas linhas de dados processadas:
+    // console.log("[Export CSV] Primeiras 3 linhas de dados CSV:", csvRows.slice(0, 3));
+
 
     const csvContent = [headerRow, ...csvRows].join('\n');
+    console.log("[Export CSV] Conteúdo CSV gerado (primeiros 500 caracteres):", csvContent.substring(0, 500));
+    console.log("[Export CSV] Comprimento total do csvContent:", csvContent.length);
+
+    if (csvContent.trim() === "" || (csvContent.trim() === headerRow.trim() && csvRows.length === 0 && headerRow.trim() !== "")) {
+        // Se o conteúdo for vazio, ou apenas o cabeçalho (e o cabeçalho em si não for vazio)
+        console.warn("[Export CSV] csvContent está vazio ou contém apenas cabeçalho (se houver dados no headerRow)!");
+    } else if (csvContent.trim() === "" && headerRow.trim() === "") {
+        console.warn("[Export CSV] csvContent está completamente vazio (sem cabeçalho, sem dados)!");
+    }
+
+
     downloadCsv(csvContent, 'relatorio_licencas.csv');
+    console.log("[Export CSV] Download solicitado.");
   });
 
   $('#exportIssues').on('click', () => {
