@@ -539,82 +539,99 @@ html {
 }
 
 
+/* Container principal para o input de texto e a lista de opções */
 .multi-search-row .custom-dropdown-container {
-    /* Usa flex para alinhar o input e o botão de remover se necessário no futuro */
-    /* display: inline-flex; */ /* Ajuste conforme o layout geral da linha */
-    /* flex-grow: 1; */ /* Para fazer o input ocupar mais espaço */
-    vertical-align: middle;
-    min-width: 200px; /* Ou a largura desejada */
+    flex-grow: 1; /* Permite que o container cresça como outros inputs na linha */
+    min-width: 150px; /* Mesma largura mínima de outros inputs na linha */
+    position: relative; /* Necessário para o posicionamento absoluto da lista de opções */
+    vertical-align: middle; /* Alinhamento vertical com outros elementos da linha */
 }
 
+/* Input de texto onde o usuário digita para filtrar */
 .multi-search-row .custom-dropdown-text-input {
-    padding: 6px 10px; /* Ajuste conforme o padding dos seus outros inputs */
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    box-sizing: border-box;
-    width: 100%; /* Ocupa a largura do .custom-dropdown-container */
-    line-height: normal; /* Garante altura consistente */
+    width: 100%; /* Ocupa toda a largura do seu container pai */
+    padding: 0.5rem; /* Consistente com o .search-input do seu tema */
+    border: 1px solid #4a5568; /* Cor de borda padrão do seu tema */
+    border-radius: 6px; /* Consistente com .search-input do seu tema */
+    font-size: 0.875rem; /* Tamanho de fonte padrão para inputs */
+    background-color: #1a202c; /* Cor de fundo padrão para inputs */
+    color: #e2e8f0; /* Cor de texto padrão */
+    box-sizing: border-box; /* Comportamento de padding e borda padrão */
+    transition: border-color 0.2s ease, background-color 0.2s ease; /* Transições do seu tema */
 }
 
+.multi-search-row .custom-dropdown-text-input:focus {
+    border-color: #3b82f6; /* Cor de borda no foco (azul) */
+    outline: none; /* Remove outline padrão */
+    background-color: #222938; /* Fundo levemente mais claro no foco */
+}
+
+.multi-search-row .custom-dropdown-text-input::placeholder {
+    color: #718096; /* Cor do placeholder do seu tema */
+}
+
+/* Lista de opções que aparece abaixo do input */
 .multi-search-row .custom-options-list {
     position: absolute;
-    background-color: white;
-    border: 1px solid #ccc;
-    border-top: none;
-    z-index: 1050; /* Alto para ficar sobre outros elementos */
-    max-height: 200px; /* Altura máxima antes de adicionar scroll */
-    overflow-y: auto;
+    top: 100%; /* Posiciona logo abaixo do input */
     left: 0;
-    right: 0; /* Para ocupar a largura do .custom-dropdown-container */
-    box-shadow: 0 3px 6px rgba(0,0,0,0.1);
-    margin-top: -1px; /* Para sobrepor a borda inferior do input */
+    right: 0; /* Ocupa a mesma largura do input container */
+    background-color: #2d3748; /* Cor de fundo dos cards/menus */
+    border: 1px solid #4a5568; /* Borda consistente com cards */
+    border-top: none; /* Remove a borda superior para "conectar" ao input visualmente */
+    border-radius: 0 0 6px 6px; /* Cantos arredondados apenas na parte inferior */
+    z-index: 1050; /* Garante que fique sobre outros elementos */
+    max-height: 220px; /* Altura máxima antes de mostrar scroll */
+    overflow-y: auto; /* Scroll vertical se necessário */
+    box-shadow: 0 5px 10px rgba(0,0,0,0.25); /* Sombra para profundidade */
+    margin-top: 1px; /* Pequeno ajuste para alinhar melhor com a borda inferior do input */
 }
 
+/* Cada item individual na lista de opções */
 .multi-search-row .custom-option-item {
-    padding: 8px 12px;
+    padding: 0.6rem 0.75rem; /* Espaçamento interno dos itens */
     cursor: pointer;
-    font-size: 0.9em; /* Ou o tamanho da fonte dos seus inputs */
-    border-bottom: 1px solid #f0f0f0;
-    white-space: nowrap; /* Evita quebra de linha se o texto for longo */
+    color: #cbd5e0; /* Cor de texto dos itens (como texto de tabela) */
+    font-size: 0.875rem;
+    border-bottom: 1px solid #4a5568; /* Linha separadora sutil, como em tabelas */
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
+
 .multi-search-row .custom-option-item:last-child {
-    border-bottom: none;
+    border-bottom: none; /* Remove a borda do último item */
 }
 
 .multi-search-row .custom-option-item:hover {
-    background-color: #e9ecef; /* Cor de hover suave */
+    background-color: #4a5568; /* Cor de fundo no hover (como o hover de linhas de tabela) */
+    color: #ffffff; /* Texto mais claro no hover */
 }
 
+/* Item especial para mensagem de "Nenhum resultado" */
 .multi-search-row .custom-option-item.no-results {
-    padding: 8px 12px;
-    color: #6c757d; /* Cor para texto "sem resultados" */
+    color: #a0aec0; /* Cor de texto secundária */
     cursor: default;
-    background-color: white !important; /* Garante que não tenha hover */
+    background-color: transparent !important; /* Sem cor de fundo ou hover */
 }
 
-/* Ajustes para a linha de multi-busca para melhor alinhamento */
-.multi-search-row {
-    display: flex;
-    align-items: center; /* Alinha verticalmente os itens */
-    gap: 8px; /* Espaçamento entre os elementos */
-    margin-bottom: 8px;
-}
-
+/* Ajustes herdados do seu CSS para a linha de multi-busca, se necessário adaptá-los:
+   Lembre-se que .custom-dropdown-container agora também deve ter flex-grow:1
+   e min-width:150px como os outros inputs na .multi-search-row
+*/
 .multi-search-row .column-select,
-.multi-search-row .search-input,
+.multi-search-row .search-input, /* Oculto quando o custom-dropdown está ativo */
 .multi-search-row .custom-dropdown-container {
-    flex-grow: 1; /* Permite que os campos de input cresçam */
-     min-width: 150px; /* Define uma largura mínima */
-}
-.multi-search-row .column-select {
-    flex-grow: 0.5; /* O select da coluna pode ser menor */
-     min-width: 120px;
+    flex-grow: 1;
+    min-width: 150px; /* Garante um tamanho mínimo razoável */
 }
 
-.multi-search-row .remove-field {
-    flex-shrink: 0; /* Não encolhe o botão */
-    padding: 6px 10px;
-    /* Estilos do seu botão */
+.multi-search-row .column-select {
+    flex-grow: 0.5; /* O select da coluna pode ser um pouco menor */
+    min-width: 120px; /* Ajuste conforme o texto das colunas */
+    /* A altura dos selects é definida globalmente no seu CSS para 33px */
+    /* Para consistência, o .custom-dropdown-text-input terá altura baseada no padding/font-size */
+    /* Se quiser altura EXATA igual aos selects, adicione height e ajuste padding: */
+    /* height: 33px; padding-top: 0; padding-bottom: 0; display: flex; align-items: center; */
 }
