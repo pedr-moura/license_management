@@ -510,3 +510,30 @@
   margin: 0;
   font-size: 1.2em;
 }
+
+/* Estilização da scrollbar para navegadores baseados em WebKit (Chrome, Edge, Safari) */
+::-webkit-scrollbar {
+  width: 10px; /* Largura da scrollbar vertical */
+  height: 10px; /* Altura da scrollbar horizontal */
+}
+
+::-webkit-scrollbar-track {
+  background: #1a202c; /* Cor do fundo da pista (track), igual ao fundo da página */
+  border-radius: 8px; /* Bordas arredondadas para a pista */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #4a5568; /* Cor do "polegar" (thumb), combinando com elementos como .card */
+  border-radius: 8px; /* Bordas arredondadas para o thumb */
+  border: 2px solid #1a202c; /* Borda para criar um pequeno espaço visual */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #5a667a; /* Cor ao passar o mouse, igual ao hover de .card */
+}
+
+/* Estilização para Firefox (padrão moderno) */
+html {
+  scrollbar-width: thin; /* Define uma scrollbar fina */
+  scrollbar-color: #4a5568 #1a202c; /* Cor do thumb e track */
+}
