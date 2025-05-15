@@ -500,6 +500,30 @@
         text-align: center;
       }
     }
+
+    .license-select {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #4a5568;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background-color: #1a202c;
+    color: #e2e8f0;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23A0AEC0%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.4-5.4-13z%22%2F%3E%3C%2Fsvg%3E');
+    background-repeat: no-repeat;
+    background-position: right 0.7em top 50%;
+    background-size: 0.65em auto;
+    padding-right: 2.5em;
+}
+.license-select:focus {
+    border-color: #3b82f6;
+    outline: none;
+    background-color: #222938;
+}
   </style>
 </head>
 <body>
@@ -1002,17 +1026,18 @@ language: {
     }
 
     function updateLicenseInputState($row) {
-        const $select = $row.find('.column-select');
-        const $input = $row.find('.search-input').not('.column-select'); // Pega o input de termo
-        if ($select.val() == 6) { // Coluna de Licenças
-            $input.attr('list', 'licenseDatalist');
-            $input.attr('placeholder', 'Selecione ou digite licença...');
-        } else {
-            $input.removeAttr('list');
-            $input.attr('placeholder', 'Termo...');
-        }
-    }
-
+    const $select = $row.find('.column-select');
+    const $input = $row.find('.search-input');
+    const $licenseSelect = $row.find('.license-select');
+      if ($select.val() == 6) { // Coluna de Licenças
+          $input.hide();
+          $licenseSelect.show();
+      } else {
+          $input.show();
+          $licenseSelect.hide();
+          $input.attr('placeholder', 'Termo...');
+      }
+  }
     function setupMultiSearch() {
         const cols = [
             { v: 0, text: 'ID' }, { v: 1, text: 'Nome' }, { v: 2, text: 'Email' },
@@ -1022,21 +1047,31 @@ language: {
         const $ct = $('#multiSearchFields'); // Não esvaziar aqui, para persistir filtros
         
         function addSearchField() {
-            const $r = $(`<div class="multi-search-row">
-                <select class="column-select">
-                    ${cols.map(c => `<option value="${c.v}">${c.text}</option>`).join('')}
-                </select>
-                <input class="search-input" placeholder="Termo..." />
-                <button class="remove-field" title="Remover filtro"><i class="fas fa-trash-alt"></i></button>
-            </div>`);
-            $ct.append($r);
+        const $r = $(`<div class="multi-search-row">
+            <select class="column-select">
+                ${cols.map(c => `<option value="${c.v}">${c.text}</option>`).join('')}
+            </select>
+            <input class="search-input" placeholder="Termo..." />
+            <select class="license-select" style="display: none;">
+                <option value="">Selecione uma licença...</option>
+                ${uniqueLicenseNames.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('')}
+            </select>
+            <button class="remove-field" title="Remover filtro"><i class="fas fa-trash-alt"></i></button>
+        </div>`);
+        $ct.append($r);
+        updateLicenseInputState($r);
+        $r.find('.column-select').on('change', function() {
             updateLicenseInputState($r);
-            $r.find('.search-input, .column-select').on('input change', applyMultiSearch);
-            $r.find('.remove-field').on('click', function() {
-                $(this).closest('.multi-search-row').remove();
-                applyMultiSearch();
-            });
-        }
+            $r.find('.search-input').val(''); // Limpa o input ao mudar a coluna
+            $r.find('.license-select').val(''); // Limpa o select ao mudar a coluna
+            applyMultiSearch();
+        });
+        $r.find('.search-input, .license-select').on('input change', applyMultiSearch);
+        $r.find('.remove-field').on('click', function() {
+            $(this).closest('.multi-search-row').remove();
+            applyMultiSearch();
+        });
+    }
 
         $('#addSearchField').off('click').on('click', addSearchField);
         $('#multiSearchOperator').off('change').on('change', applyMultiSearch);
@@ -1048,81 +1083,83 @@ language: {
     }
 
     function _executeMultiSearchLogic() {
-        const op = $('#multiSearchOperator').val();
-        const $searchCriteria = $('#searchCriteria');
-        
-        if (!table && allData.length === 0) {
-            $searchCriteria.text('Nenhum critério aplicado. Carregue um arquivo JSON.');
-            return;
-        }
-        if (!table && allData.length > 0) {
-            $searchCriteria.text('Tabela não inicializada, mas dados carregados. Filtros serão aplicados ao carregar a tabela.');
-            return;
-        }
-         if (!table) { // Segurança adicional
-            $searchCriteria.text('Tabela não disponível.');
-            return;
-        }
-
-
-        $searchCriteria.text(op === 'AND' ?
-            'Critério: Afunilando resultados (todos os filtros devem corresponder)' :
-            'Critério: Expandindo resultados (qualquer filtro corresponde)');
-
-        table.search('').columns().search(''); // Limpa filtros nativos
-        const rows = $('#multiSearchFields .multi-search-row');
-        const filters = [];
-        rows.each(function() {
-            const idx = $(this).find('.column-select').val();
-            const val = $(this).find('.search-input').not('.column-select').val().trim();
-            if (val) {
-                filters.push({ col: parseInt(idx, 10), term: val });
-            }
-        });
-
-        // Limpa filtros customizados anteriores do DataTables
-        while ($.fn.dataTable.ext.search.length > 0) {
-            $.fn.dataTable.ext.search.pop();
-        }
-
-        if (filters.length > 0) {
-            $searchCriteria.append(` (${filters.length} filtro(s) ativo(s))`);
-            $.fn.dataTable.ext.search.push(
-                function(settings, data, dataIndex) {
-                    if (settings.nTable.id !== table.table().node().id) return true;
-                    const rowData = table.row(dataIndex).data();
-                    if (!rowData) return false; 
-
-                    if (op === 'OR') {
-                        return filters.some(filter => {
-                            if (filter.col === 6) { // Licenças
-                                return (rowData.Licenses && Array.isArray(rowData.Licenses)) ?
-                                    rowData.Licenses.map(l => l.LicenseName || '').join(', ').toLowerCase().includes(filter.term.toLowerCase()) : false;
-                            }
-                            const cellValue = data[filter.col] || '';
-                            return cellValue.toString().toLowerCase().includes(filter.term.toLowerCase());
-                        });
-                    } else { // AND
-                        return filters.every(filter => {
-                            if (filter.col === 6) { // Licenças
-                                return (rowData.Licenses && Array.isArray(rowData.Licenses)) ?
-                                    rowData.Licenses.map(l => l.LicenseName || '').join(', ').toLowerCase().includes(filter.term.toLowerCase()) : false;
-                            }
-                            const cellValue = data[filter.col] || '';
-                            return cellValue.toString().toLowerCase().includes(filter.term.toLowerCase());
-                        });
-                    }
-                }
-            );
-        } else {
-            $searchCriteria.text(op === 'AND' ? 'Critério: Todos os resultados (nenhum filtro AND ativo)' : 'Critério: Todos os resultados (nenhum filtro OR ativo)');
-        }
-        table.draw();
-        // Remove o filtro customizado após o draw para não interferir em outras operações
-        if (filters.length > 0 && $.fn.dataTable.ext.search.length > 0) {
-            $.fn.dataTable.ext.search.pop();
-        }
+    const op = $('#multiSearchOperator').val();
+    const $searchCriteria = $('#searchCriteria');
+    
+    if (!table && allData.length === 0) {
+        $searchCriteria.text('Nenhum critério aplicado. Carregue um arquivo JSON.');
+        return;
     }
+    if (!table && allData.length > 0) {
+        $searchCriteria.text('Tabela não inicializada, mas dados carregados. Filtros serão aplicados ao carregar a tabela.');
+        return;
+    }
+    if (!table) {
+        $searchCriteria.text('Tabela não disponível.');
+        return;
+    }
+
+    $searchCriteria.text(op === 'AND' ?
+        'Critério: Afunilando resultados (todos os filtros devem corresponder)' :
+        'Critério: Expandindo resultados (qualquer filtro corresponde)');
+
+    table.search('').columns().search(''); // Limpa filtros nativos
+    const rows = $('#multiSearchFields .multi-search-row');
+    const filters = [];
+    rows.each(function() {
+        const idx = $(this).find('.column-select').val();
+        let val;
+        if (idx == 6) {
+            val = $(this).find('.license-select').val(); // Usa o license-select para licenças
+        } else {
+            val = $(this).find('.search-input').val().trim();
+        }
+        if (val) {
+            filters.push({ col: parseInt(idx, 10), term: val });
+        }
+    });
+
+    while ($.fn.dataTable.ext.search.length > 0) {
+        $.fn.dataTable.ext.search.pop();
+    }
+
+    if (filters.length > 0) {
+        $searchCriteria.append(` (${filters.length} filtro(s) ativo(s))`);
+        $.fn.dataTable.ext.search.push(
+            function(settings, data, dataIndex) {
+                if (settings.nTable.id !== table.table().node().id) return true;
+                const rowData = table.row(dataIndex).data();
+                if (!rowData) return false;
+
+                if (op === 'OR') {
+                    return filters.some(filter => {
+                        if (filter.col === 6) {
+                            return (rowData.Licenses && Array.isArray(rowData.Licenses)) ?
+                                rowData.Licenses.some(l => (l.LicenseName || '').toLowerCase() === filter.term.toLowerCase()) : false;
+                        }
+                        const cellValue = data[filter.col] || '';
+                        return cellValue.toString().toLowerCase().includes(filter.term.toLowerCase());
+                    });
+                } else { // AND
+                    return filters.every(filter => {
+                        if (filter.col === 6) {
+                            return (rowData.Licenses && Array.isArray(rowData.Licenses)) ?
+                                rowData.Licenses.some(l => (l.LicenseName || '').toLowerCase() === filter.term.toLowerCase()) : false;
+                        }
+                        const cellValue = data[filter.col] || '';
+                        return cellValue.toString().toLowerCase().includes(filter.term.toLowerCase());
+                    });
+                }
+            }
+        );
+    } else {
+        $searchCriteria.text(op === 'AND' ? 'Critério: Todos os resultados (nenhum filtro AND ativo)' : 'Critério: Todos os resultados (nenhum filtro OR ativo)');
+    }
+    table.draw();
+    if (filters.length > 0 && $.fn.dataTable.ext.search.length > 0) {
+        $.fn.dataTable.ext.search.pop();
+    }
+}
 
     function applyMultiSearch() {
         clearTimeout(multiSearchDebounceTimer);
