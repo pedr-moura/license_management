@@ -537,3 +537,84 @@ html {
   scrollbar-width: thin; /* Define uma scrollbar fina */
   scrollbar-color: #4a5568 #1a202c; /* Cor do thumb e track */
 }
+
+
+.multi-search-row .custom-dropdown-container {
+    /* Usa flex para alinhar o input e o botão de remover se necessário no futuro */
+    /* display: inline-flex; */ /* Ajuste conforme o layout geral da linha */
+    /* flex-grow: 1; */ /* Para fazer o input ocupar mais espaço */
+    vertical-align: middle;
+    min-width: 200px; /* Ou a largura desejada */
+}
+
+.multi-search-row .custom-dropdown-text-input {
+    padding: 6px 10px; /* Ajuste conforme o padding dos seus outros inputs */
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+    width: 100%; /* Ocupa a largura do .custom-dropdown-container */
+    line-height: normal; /* Garante altura consistente */
+}
+
+.multi-search-row .custom-options-list {
+    position: absolute;
+    background-color: white;
+    border: 1px solid #ccc;
+    border-top: none;
+    z-index: 1050; /* Alto para ficar sobre outros elementos */
+    max-height: 200px; /* Altura máxima antes de adicionar scroll */
+    overflow-y: auto;
+    left: 0;
+    right: 0; /* Para ocupar a largura do .custom-dropdown-container */
+    box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+    margin-top: -1px; /* Para sobrepor a borda inferior do input */
+}
+
+.multi-search-row .custom-option-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.9em; /* Ou o tamanho da fonte dos seus inputs */
+    border-bottom: 1px solid #f0f0f0;
+    white-space: nowrap; /* Evita quebra de linha se o texto for longo */
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.multi-search-row .custom-option-item:last-child {
+    border-bottom: none;
+}
+
+.multi-search-row .custom-option-item:hover {
+    background-color: #e9ecef; /* Cor de hover suave */
+}
+
+.multi-search-row .custom-option-item.no-results {
+    padding: 8px 12px;
+    color: #6c757d; /* Cor para texto "sem resultados" */
+    cursor: default;
+    background-color: white !important; /* Garante que não tenha hover */
+}
+
+/* Ajustes para a linha de multi-busca para melhor alinhamento */
+.multi-search-row {
+    display: flex;
+    align-items: center; /* Alinha verticalmente os itens */
+    gap: 8px; /* Espaçamento entre os elementos */
+    margin-bottom: 8px;
+}
+
+.multi-search-row .column-select,
+.multi-search-row .search-input,
+.multi-search-row .custom-dropdown-container {
+    flex-grow: 1; /* Permite que os campos de input cresçam */
+     min-width: 150px; /* Define uma largura mínima */
+}
+.multi-search-row .column-select {
+    flex-grow: 0.5; /* O select da coluna pode ser menor */
+     min-width: 120px;
+}
+
+.multi-search-row .remove-field {
+    flex-shrink: 0; /* Não encolhe o botão */
+    padding: 6px 10px;
+    /* Estilos do seu botão */
+}
