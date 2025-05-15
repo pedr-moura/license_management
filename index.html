@@ -1181,7 +1181,7 @@ language: {
         $('#alertPanel').empty();
         $('#colContainer .col-vis').each(function() {
             const idx = +$(this).data('col');
-            const isDefaultVisible = [1, 2, 3, 6].includes(idx);
+            const isDefaultVisible = [3, 6].includes(idx);
             if (table) {
                 try { table.column(idx).visible(isDefaultVisible); } catch(e){}
             }
