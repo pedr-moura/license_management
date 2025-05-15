@@ -130,221 +130,221 @@ $(document).ready(function() {
       deferRender: true,
       pageLength: 25,
       orderCellsTop: true,
-      language: { // OBJETO LANGUAGE COMPLETO DO SEU ORIGINAL
-        "emptyTable": "Nenhum registro encontrado",
-        "info": "Mostrando de _START_ até _END_ de _TOTAL_ registros",
-        "infoEmpty": "Mostrando 0 até 0 de 0 registros",
-        "infoFiltered": "(Filtrados de _MAX_ registros)",
-        "infoThousands": ".",
-        "lengthMenu": "_MENU_ resultados por página",
-        "loadingRecords": "Carregando...",
-        "processing": "Processando...",
-        "zeroRecords": "Nenhum registro encontrado",
-        "search": "Pesquisar:",
-        "paginate": {
-          "next": "Próximo",
-          "previous": "Anterior",
-          "first": "Primeiro",
-          "last": "Último"
-        },
-        "aria": {
-          "sortAscending": ": Ordenar colunas de forma ascendente",
-          "sortDescending": ": Ordenar colunas de forma descendente"
-        },
-        "select": {
-          "rows": {
-            "_": "Selecionado %d linhas",
-            "0": "Nenhuma linha selecionada",
-            "1": "Selecionado 1 linha"
-          },
-          "cells": {
-            "1": "1 célula selecionada",
-            "_": "%d células selecionadas"
-          },
-          "columns": {
-            "1": "1 coluna selecionada",
-            "_": "%d colunas selecionadas"
-          }
-        },
-        "buttons": {
-          "copySuccess": {
-            "1": "Uma linha copiada para a área de transferência",
-            "_": "%d linhas copiadas para a área de transferência"
-          },
-          "collection": "Coleção <span class=\"ui-button-icon-primary ui-icon ui-icon-triangle-1-s\"></span>",
-          "colvis": "Visibilidade da Coluna",
-          "colvisRestore": "Restaurar Visibilidade",
-          "copy": "Copiar",
-          "copyKeys": "Pressione ctrl ou u2318 + C para copiar os dados da tabela para a área de transferência do sistema. Para cancelar, clique nesta mensagem ou pressione Esc.",
-          "copyTitle": "Copiar para área de transferência",
-          "csv": "CSV",
-          "excel": "Excel",
-          "pageLength": {
-            "-1": "Mostrar todos os registros",
-            "_": "Mostrar %d registros"
-          },
-          "pdf": "PDF",
-          "print": "Imprimir",
-          "createState": "Criar estado",
-          "removeAllStates": "Remover todos os estados",
-          "removeState": "Remover",
-          "renameState": "Renomear",
-          "savedStates": "Estados salvos",
-          "stateRestore": "Estado %d",
-          "updateState": "Atualizar"
-        },
-        "searchBuilder": {
-          "add": "Adicionar Condição",
-          "button": {
-            "0": "Construtor de Pesquisa",
-            "_": "Construtor de Pesquisa (%d)"
-          },
-          "clearAll": "Limpar Tudo",
-          "condition": "Condição",
-          "conditions": {
-            "date": {
-              "after": "Depois",
-              "before": "Antes",
-              "between": "Entre",
-              "empty": "Vazio",
-              "equals": "Igual",
-              "not": "Não",
-              "notBetween": "Não Entre",
-              "notEmpty": "Não Vazio"
-            },
-            "number": {
-              "between": "Entre",
-              "empty": "Vazio",
-              "equals": "Igual",
-              "gt": "Maior Que",
-              "gte": "Maior Ou Igual Que",
-              "lt": "Menor Que",
-              "lte": "Menor Ou Igual Que",
-              "not": "Não",
-              "notBetween": "Não Entre",
-              "notEmpty": "Não Vazio"
-            },
-            "string": {
-              "contains": "Contém",
-              "empty": "Vazio",
-              "endsWith": "Termina Com",
-              "equals": "Igual",
-              "not": "Não",
-              "notEmpty": "Não Vazio",
-              "startsWith": "Começa Com",
-              "notContains": "Não contém",
-              "notStartsWith": "Não começa com",
-              "notEndsWith": "Não termina com"
-            },
-            "array": {
-              "without": "Sem",
-              "notEmpty": "Não Vazio",
-              "not": "Não",
-              "contains": "Contém",
-              "empty": "Vazio",
-              "equals": "Igual"
-            }
-          },
-          "data": "Data",
-          "deleteTitle": "Excluir regra de filtragem",
-          "logicAnd": "E",
-          "logicOr": "Ou",
-          "title": {
-            "0": "Construtor de Pesquisa",
-            "_": "Construtor de Pesquisa (%d)"
-          },
-          "value": "Valor",
-          "leftTitle": "Critérios Externos",
-          "rightTitle": "Critérios Internos"
-        },
-        "searchPanes": {
-          "clearMessage": "Limpar Tudo",
-          "collapse": {
-            "0": "Painéis de Pesquisa",
-            "_": "Painéis de Pesquisa (%d)"
-          },
-          "count": "{total}",
-          "countFiltered": "{shown} ({total})",
-          "emptyPanes": "Nenhum Painel de Pesquisa",
-          "loadMessage": "Carregando Painéis de Pesquisa...",
-          "title": "Filtros Ativos",
-          "showMessage": "Mostrar todos",
-          "collapseMessage": "Fechar todos"
-        },
-        "thousands": ".",
-        "datetime": {
-          "previous": "Anterior",
-          "next": "Próximo",
-          "hours": "Hora",
-          "minutes": "Minuto",
-          "seconds": "Segundo",
-          "unknown": "-",
-          "amPm": ["am", "pm"],
-          "weekdays": ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"],
-          "months": ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
-        },
-        "editor": {
-          "close": "Fechar",
-          "create": {
-            "button": "Novo",
-            "title": "Criar novo registro",
-            "submit": "Criar"
-          },
-          "edit": {
-            "button": "Editar",
-            "title": "Editar registro",
-            "submit": "Atualizar"
-          },
-          "remove": {
-            "button": "Remover",
-            "title": "Remover registro",
-            "submit": "Remover",
-            "confirm": {
-              "_": "Deseja realmente remover %d registros?",
-              "1": "Deseja realmente remover 1 registro?"
-            }
-          },
-          "error": {
-            "system": "Ocorreu um erro no sistema (<a target=\"\\\" rel=\"nofollow\" href=\"\\\">Mais informações</a>)."
-          },
-          "multi": {
-            "title": "Múltiplos valores",
-            "info": "Os itens selecionados contêm valores diferentes para esta entrada. Para editar e definir todos os itens para esta entrada com o mesmo valor, clique ou toque aqui, caso contrário, eles manterão seus valores individuais.",
-            "restore": "Desfazer alterações",
-            "noMulti": "Esta entrada pode ser editada individualmente, mas não como parte de um grupo."
-          }
-        },
-        "stateRestore": {
-          "creationModal": {
-            "button": "Criar",
-            "columns": {
-              "search": "Busca de colunas",
-              "visible": "Visibilidade da coluna"
-            },
-            "name": "Nome:",
-            "order": "Ordernar",
-            "paging": "Paginação",
-            "scroller": "Posição da barra de rolagem",
-            "search": "Busca",
-            "searchBuilder": "Construtor de pesquisa",
-            "select": "Selecionar",
-            "title": "Criar novo estado",
-            "toggleLabel": "Inclui:"
-          },
-          "duplicateError": "Já existe um estado com este nome.",
-          "emptyError": "Não pode ser vazio.",
-          "emptyStates": "Nenhum estado salvo",
-          "removeConfirm": "Confirma remover %s?",
-          "removeError": "Falha ao remover estado.",
-          "removeJoiner": "e",
-          "removeSubmit": "Remover",
-          "removeTitle": "Remover estado",
-          "renameButton": "Renomear",
-          "renameLabel": "Novo nome para %s:",
-          "renameTitle": "Renomear estado"
-        },
-        "decimal": ","
-      }, // FIM DO OBJETO LANGUAGE COMPLETO
+      // language: { // OBJETO LANGUAGE COMPLETO DO SEU ORIGINAL
+      //   "emptyTable": "Nenhum registro encontrado",
+      //   "info": "Mostrando de _START_ até _END_ de _TOTAL_ registros",
+      //   "infoEmpty": "Mostrando 0 até 0 de 0 registros",
+      //   "infoFiltered": "(Filtrados de _MAX_ registros)",
+      //   "infoThousands": ".",
+      //   "lengthMenu": "_MENU_ resultados por página",
+      //   "loadingRecords": "Carregando...",
+      //   "processing": "Processando...",
+      //   "zeroRecords": "Nenhum registro encontrado",
+      //   "search": "Pesquisar:",
+      //   "paginate": {
+      //     "next": "Próximo",
+      //     "previous": "Anterior",
+      //     "first": "Primeiro",
+      //     "last": "Último"
+      //   },
+      //   "aria": {
+      //     "sortAscending": ": Ordenar colunas de forma ascendente",
+      //     "sortDescending": ": Ordenar colunas de forma descendente"
+      //   },
+      //   "select": {
+      //     "rows": {
+      //       "_": "Selecionado %d linhas",
+      //       "0": "Nenhuma linha selecionada",
+      //       "1": "Selecionado 1 linha"
+      //     },
+      //     "cells": {
+      //       "1": "1 célula selecionada",
+      //       "_": "%d células selecionadas"
+      //     },
+      //     "columns": {
+      //       "1": "1 coluna selecionada",
+      //       "_": "%d colunas selecionadas"
+      //     }
+      //   },
+      //   "buttons": {
+      //     "copySuccess": {
+      //       "1": "Uma linha copiada para a área de transferência",
+      //       "_": "%d linhas copiadas para a área de transferência"
+      //     },
+      //     "collection": "Coleção <span class=\"ui-button-icon-primary ui-icon ui-icon-triangle-1-s\"></span>",
+      //     "colvis": "Visibilidade da Coluna",
+      //     "colvisRestore": "Restaurar Visibilidade",
+      //     "copy": "Copiar",
+      //     "copyKeys": "Pressione ctrl ou u2318 + C para copiar os dados da tabela para a área de transferência do sistema. Para cancelar, clique nesta mensagem ou pressione Esc.",
+      //     "copyTitle": "Copiar para área de transferência",
+      //     "csv": "CSV",
+      //     "excel": "Excel",
+      //     "pageLength": {
+      //       "-1": "Mostrar todos os registros",
+      //       "_": "Mostrar %d registros"
+      //     },
+      //     "pdf": "PDF",
+      //     "print": "Imprimir",
+      //     "createState": "Criar estado",
+      //     "removeAllStates": "Remover todos os estados",
+      //     "removeState": "Remover",
+      //     "renameState": "Renomear",
+      //     "savedStates": "Estados salvos",
+      //     "stateRestore": "Estado %d",
+      //     "updateState": "Atualizar"
+      //   },
+      //   "searchBuilder": {
+      //     "add": "Adicionar Condição",
+      //     "button": {
+      //       "0": "Construtor de Pesquisa",
+      //       "_": "Construtor de Pesquisa (%d)"
+      //     },
+      //     "clearAll": "Limpar Tudo",
+      //     "condition": "Condição",
+      //     "conditions": {
+      //       "date": {
+      //         "after": "Depois",
+      //         "before": "Antes",
+      //         "between": "Entre",
+      //         "empty": "Vazio",
+      //         "equals": "Igual",
+      //         "not": "Não",
+      //         "notBetween": "Não Entre",
+      //         "notEmpty": "Não Vazio"
+      //       },
+      //       "number": {
+      //         "between": "Entre",
+      //         "empty": "Vazio",
+      //         "equals": "Igual",
+      //         "gt": "Maior Que",
+      //         "gte": "Maior Ou Igual Que",
+      //         "lt": "Menor Que",
+      //         "lte": "Menor Ou Igual Que",
+      //         "not": "Não",
+      //         "notBetween": "Não Entre",
+      //         "notEmpty": "Não Vazio"
+      //       },
+      //       "string": {
+      //         "contains": "Contém",
+      //         "empty": "Vazio",
+      //         "endsWith": "Termina Com",
+      //         "equals": "Igual",
+      //         "not": "Não",
+      //         "notEmpty": "Não Vazio",
+      //         "startsWith": "Começa Com",
+      //         "notContains": "Não contém",
+      //         "notStartsWith": "Não começa com",
+      //         "notEndsWith": "Não termina com"
+      //       },
+      //       "array": {
+      //         "without": "Sem",
+      //         "notEmpty": "Não Vazio",
+      //         "not": "Não",
+      //         "contains": "Contém",
+      //         "empty": "Vazio",
+      //         "equals": "Igual"
+      //       }
+      //     },
+      //     "data": "Data",
+      //     "deleteTitle": "Excluir regra de filtragem",
+      //     "logicAnd": "E",
+      //     "logicOr": "Ou",
+      //     "title": {
+      //       "0": "Construtor de Pesquisa",
+      //       "_": "Construtor de Pesquisa (%d)"
+      //     },
+      //     "value": "Valor",
+      //     "leftTitle": "Critérios Externos",
+      //     "rightTitle": "Critérios Internos"
+      //   },
+      //   "searchPanes": {
+      //     "clearMessage": "Limpar Tudo",
+      //     "collapse": {
+      //       "0": "Painéis de Pesquisa",
+      //       "_": "Painéis de Pesquisa (%d)"
+      //     },
+      //     "count": "{total}",
+      //     "countFiltered": "{shown} ({total})",
+      //     "emptyPanes": "Nenhum Painel de Pesquisa",
+      //     "loadMessage": "Carregando Painéis de Pesquisa...",
+      //     "title": "Filtros Ativos",
+      //     "showMessage": "Mostrar todos",
+      //     "collapseMessage": "Fechar todos"
+      //   },
+      //   "thousands": ".",
+      //   "datetime": {
+      //     "previous": "Anterior",
+      //     "next": "Próximo",
+      //     "hours": "Hora",
+      //     "minutes": "Minuto",
+      //     "seconds": "Segundo",
+      //     "unknown": "-",
+      //     "amPm": ["am", "pm"],
+      //     "weekdays": ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"],
+      //     "months": ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+      //   },
+      //   "editor": {
+      //     "close": "Fechar",
+      //     "create": {
+      //       "button": "Novo",
+      //       "title": "Criar novo registro",
+      //       "submit": "Criar"
+      //     },
+      //     "edit": {
+      //       "button": "Editar",
+      //       "title": "Editar registro",
+      //       "submit": "Atualizar"
+      //     },
+      //     "remove": {
+      //       "button": "Remover",
+      //       "title": "Remover registro",
+      //       "submit": "Remover",
+      //       "confirm": {
+      //         "_": "Deseja realmente remover %d registros?",
+      //         "1": "Deseja realmente remover 1 registro?"
+      //       }
+      //     },
+      //     "error": {
+      //       "system": "Ocorreu um erro no sistema (<a target=\"\\\" rel=\"nofollow\" href=\"\\\">Mais informações</a>)."
+      //     },
+      //     "multi": {
+      //       "title": "Múltiplos valores",
+      //       "info": "Os itens selecionados contêm valores diferentes para esta entrada. Para editar e definir todos os itens para esta entrada com o mesmo valor, clique ou toque aqui, caso contrário, eles manterão seus valores individuais.",
+      //       "restore": "Desfazer alterações",
+      //       "noMulti": "Esta entrada pode ser editada individualmente, mas não como parte de um grupo."
+      //     }
+      //   },
+      //   "stateRestore": {
+      //     "creationModal": {
+      //       "button": "Criar",
+      //       "columns": {
+      //         "search": "Busca de colunas",
+      //         "visible": "Visibilidade da coluna"
+      //       },
+      //       "name": "Nome:",
+      //       "order": "Ordernar",
+      //       "paging": "Paginação",
+      //       "scroller": "Posição da barra de rolagem",
+      //       "search": "Busca",
+      //       "searchBuilder": "Construtor de pesquisa",
+      //       "select": "Selecionar",
+      //       "title": "Criar novo estado",
+      //       "toggleLabel": "Inclui:"
+      //     },
+      //     "duplicateError": "Já existe um estado com este nome.",
+      //     "emptyError": "Não pode ser vazio.",
+      //     "emptyStates": "Nenhum estado salvo",
+      //     "removeConfirm": "Confirma remover %s?",
+      //     "removeError": "Falha ao remover estado.",
+      //     "removeJoiner": "e",
+      //     "removeSubmit": "Remover",
+      //     "removeTitle": "Remover estado",
+      //     "renameButton": "Renomear",
+      //     "renameLabel": "Novo nome para %s:",
+      //     "renameTitle": "Renomear estado"
+      //   },
+      //   "decimal": ","
+      // }, // FIM DO OBJETO LANGUAGE COMPLETO
       columnDefs: [
         { targets: '_all', visible: false },
         { targets: [1, 2, 3, 6], visible: true }
