@@ -24,8 +24,6 @@ $(document).ready(function() {
             $('body').append('<div id="loadingOverlay"><div class="loader-content"><p id="loaderMessageText"></p></div></div>');
             $overlay = $('#loadingOverlay'); // Re-select after appending
         }
-        // Update message and show. CSS handles the appearance.
-        // .css('display', 'flex') is used because .show() might set display:block
         $overlay.find('#loaderMessageText').text(message);
         $overlay.css('display', 'flex');
     }
@@ -34,28 +32,18 @@ $(document).ready(function() {
         $('#loadingOverlay').hide();
     }
 
-    // Generates a unique key for a user based on DisplayName and OfficeLocation
     const nameKey = u => `${u.DisplayName || ''}|||${u.OfficeLocation || ''}`;
-
-    // Escapes HTML special characters in a string
     const escapeHtml = s => typeof s === 'string' ? s.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]) : '';
 
-    // Escapes a value for CSV export, optionally forcing quotes if it contains a semicolon
     function escapeCsvValue(value, forceQuotesOnSemicolon = false) {
-        if (value == null) return ''; // Handle null or undefined by returning an empty string
+        if (value == null) return '';
         let stringValue = String(value);
-        const regex = forceQuotesOnSemicolon ? /[,"\n\r;]/ : /[,"\n\r]/; // Add semicolon to regex if forced
+        const regex = forceQuotesOnSemicolon ? /[,"\n\r;]/ : /[,"\n\r]/;
         if (regex.test(stringValue)) {
-            stringValue = `"${stringValue.replace(/"/g, '""')}"`; // Double up existing quotes and wrap in quotes
+            stringValue = `"${stringValue.replace(/"/g, '""')}"`;
         }
         return stringValue;
     }
-
-    // --- Functions intended for Web Worker ---
-    // These are defined here for clarity but would be part of the worker script string.
-    // validateJsonForWorker, findIssuesForWorker, calculateUniqueFieldValuesForWorker
-    // (Their internal logic remains the same as in the previous optimized version,
-    //  but any internal strings/comments would also be in English if they were user-facing)
 
     function renderAlerts() {
         const $alertPanel = $('#alertPanel').empty();
@@ -65,7 +53,7 @@ $(document).ready(function() {
         if (dupLicUsers.size) {
             const usersToList = allData.filter(u => dupLicUsers.has(u.Id));
             let listHtml = '';
-            const maxPreview = 10; // Show first N items in the alert
+            const maxPreview = 10;
             usersToList.slice(0, maxPreview).forEach(u => {
                 const licCount = {}, duplicateLicNames = [];
                 (u.Licenses || []).forEach(l => { licCount[l.LicenseName] = (licCount[l.LicenseName] || 0) + 1; });
@@ -103,7 +91,6 @@ $(document).ready(function() {
     function initTable(data) {
         allData = data;
 
-        // Populate datalist for license suggestions (if used by any input)
         if ($('#licenseDatalist').length === 0) { $('body').append('<datalist id="licenseDatalist"></datalist>'); }
         const $licenseDatalist = $('#licenseDatalist').empty();
         if (uniqueFieldValues.Licenses) {
@@ -116,8 +103,8 @@ $(document).ready(function() {
             data: allData,
             deferRender: true,
             pageLength: 25,
-            orderCellsTop: true, // For individual column searching
-            columns: [ // Titles now in English
+            orderCellsTop: true,
+            columns: [
                 { data: 'Id', title: 'ID', visible: false },
                 { data: 'DisplayName', title: 'Name', visible: true },
                 { data: 'Email', title: 'Email', visible: true },
@@ -128,7 +115,6 @@ $(document).ready(function() {
             ],
             initComplete: function() {
                 const api = this.api();
-                // Individual column search setup
                 api.columns().every(function(colIdx) {
                     const column = this;
                     $(api.table().header()).find('tr:eq(1) th:eq(' + colIdx + ') input')
@@ -139,7 +125,6 @@ $(document).ready(function() {
                         });
                 });
 
-                // Column visibility checkboxes
                 $('#colContainer .col-vis').each(function() {
                     const idx = +$(this).data('col');
                     try {
@@ -169,38 +154,35 @@ $(document).ready(function() {
             },
             drawCallback: function() {
                 renderAlerts();
-                hideLoader(); // Hide loader after table is drawn
+                hideLoader();
             }
         });
-        // Show loader before drawing, hideLoader is called in drawCallback
         $(table.table().node()).on('preDraw.dt', () => showLoader('Updating table...'));
     }
-
 
     function updateSearchFieldUI($row) {
         const selectedColIndex = $row.find('.column-select').val();
         const columnConfig = searchableColumnsConfig.find(c => c.index == selectedColIndex);
 
-        const $searchInput = $row.find('.search-input'); // Standard text input
+        const $searchInput = $row.find('.search-input');
         const $customDropdownContainer = $row.find('.custom-dropdown-container');
-        const $customDropdownTextInput = $row.find('.custom-dropdown-text-input'); // Text input for custom dropdown
-        const $customOptionsList = $row.find('.custom-options-list'); // List for custom dropdown options
-        const $hiddenValueSelect = $row.find('.search-value-select'); // Hidden select to store chosen dropdown value
+        const $customDropdownTextInput = $row.find('.custom-dropdown-text-input');
+        const $customOptionsList = $row.find('.custom-options-list');
+        const $hiddenValueSelect = $row.find('.search-value-select');
 
-        // Clear previous event handlers to prevent accumulation
         $customDropdownTextInput.off();
         $customOptionsList.off();
 
         if (columnConfig && columnConfig.useDropdown) {
-            $searchInput.hide(); // Hide standard text input
-            $customDropdownContainer.show(); // Show custom dropdown UI
-            $customDropdownTextInput.val(''); // Clear any previous text
+            $searchInput.hide();
+            $customDropdownContainer.show();
+            $customDropdownTextInput.val('');
             $customDropdownTextInput.attr('placeholder', `Type or select ${columnConfig.title.toLowerCase()}`);
-            $customOptionsList.hide().empty(); // Ensure options list is initially hidden and empty
+            $customOptionsList.hide().empty();
 
-            $hiddenValueSelect.empty().append($('<option>').val('').text('')); // Add default empty option
+            $hiddenValueSelect.empty().append($('<option>').val('').text(''));
             const allUniqueOptions = uniqueFieldValues[columnConfig.dataProp] || [];
-            $hiddenValueSelect.val(''); // Ensure hidden select is cleared
+            $hiddenValueSelect.val('');
 
             let filterDebounce;
             $customDropdownTextInput.on('input', function() {
@@ -208,7 +190,7 @@ $(document).ready(function() {
                 const $input = $(this);
                 filterDebounce = setTimeout(() => {
                     const searchTerm = $input.val().toLowerCase();
-                    $customOptionsList.empty().show(); // Clear and show list
+                    $customOptionsList.empty().show();
                     const filteredOptions = allUniqueOptions.filter(opt => String(opt).toLowerCase().includes(searchTerm));
 
                     if (filteredOptions.length === 0) {
@@ -222,40 +204,39 @@ $(document).ready(function() {
                              $customOptionsList.append(`<div class="custom-option-item no-results" style="font-style:italic; color: #aaa;">${filteredOptions.length - MAX_DROPDOWN_OPTIONS_DISPLAYED} more options hidden...</div>`);
                         }
                     }
-                }, 200); // Debounce filtering
+                }, 200);
             });
 
             $customDropdownTextInput.on('focus', function() {
-                $(this).trigger('input'); // Trigger input to populate/show list
+                $(this).trigger('input');
                 $customOptionsList.show();
             });
 
             $customOptionsList.on('mousedown', '.custom-option-item', function(e) {
-                e.preventDefault(); // Prevent blur from closing list before click registers
+                e.preventDefault();
                 if ($(this).hasClass('no-results')) return;
 
                 const selectedText = $(this).text();
                 const selectedValue = $(this).data('value');
 
                 $customDropdownTextInput.val(selectedText);
-                $hiddenValueSelect.val(selectedValue).trigger('change'); // Update hidden select and trigger change for multi-search
+                $hiddenValueSelect.val(selectedValue).trigger('change'); // THIS IS KEY
                 $customOptionsList.hide();
             });
 
             let blurTimeout;
             $customDropdownTextInput.on('blur', function() {
                 clearTimeout(blurTimeout);
-                blurTimeout = setTimeout(() => { $customOptionsList.hide(); }, 150); // Delay to allow mousedown on item
+                blurTimeout = setTimeout(() => { $customOptionsList.hide(); }, 150);
             });
 
-        } else { // For standard text input (not dropdown)
+        } else {
             $searchInput.show().val('');
             $customDropdownContainer.hide();
-            $hiddenValueSelect.empty().hide(); // Clear and hide the select (CSS already hides it)
-            $searchInput.attr('placeholder', 'Term...'); // Placeholder for text input
+            $hiddenValueSelect.empty().hide();
+            $searchInput.attr('placeholder', 'Term...');
         }
     }
-
 
     function setupMultiSearch() {
         const $container = $('#multiSearchFields');
@@ -263,10 +244,6 @@ $(document).ready(function() {
             const columnOptions = searchableColumnsConfig
                 .map(c => `<option value="${c.index}">${escapeHtml(c.title)}</option>`)
                 .join('');
-
-            // HTML structure for a multi-search row.
-            // Inline styles for .custom-dropdown-container and .custom-options-list removed.
-            // CSS will handle their appearance and positioning.
             const $row = $(`
                 <div class="multi-search-row">
                     <select class="column-select">${columnOptions}</select>
@@ -280,7 +257,7 @@ $(document).ready(function() {
                 </div>
             `);
             $container.append($row);
-            updateSearchFieldUI($row); // Initialize UI (will hide one of the input types)
+            updateSearchFieldUI($row);
 
             $row.find('.column-select').on('change', function() {
                 updateSearchFieldUI($row);
@@ -294,11 +271,14 @@ $(document).ready(function() {
             });
 
             $row.find('.search-input').on('input change', applyMultiSearch);
-            $row.find('.search-value-select').on('change', applyMultiSearch); // For hidden select
+            // DEBUG: Modified handler for .search-value-select
+            $row.find('.search-value-select').on('change', function() {
+                console.log('DEBUG: Hidden select .search-value-select changed. Value:', $(this).val(), 'Applying multi-search...');
+                applyMultiSearch();
+            });
 
             $row.find('.remove-field').on('click', function() {
                 const $multiSearchRow = $(this).closest('.multi-search-row');
-                // Clean up specific handlers for custom dropdown before removing
                 $multiSearchRow.find('.custom-dropdown-text-input').off();
                 $multiSearchRow.find('.custom-options-list').off();
                 $multiSearchRow.remove();
@@ -318,8 +298,16 @@ $(document).ready(function() {
         }
     }
 
+    function applyMultiSearch() {
+        console.log('DEBUG: applyMultiSearch called'); // DEBUG
+        clearTimeout(multiSearchDebounceTimer);
+        showLoader('Applying filters...');
+        multiSearchDebounceTimer = setTimeout(_executeMultiSearchLogic, DEBOUNCE_DELAY);
+    }
+
     function _executeMultiSearchLogic() {
-        const operator = $('#multiSearchOperator').val(); // "AND" or "OR"
+        console.log('DEBUG: _executeMultiSearchLogic called'); // DEBUG
+        const operator = $('#multiSearchOperator').val();
         const $searchCriteriaText = $('#searchCriteria');
         if (!table) {
             $searchCriteriaText.text(allData.length === 0 ? 'No data loaded.' : 'Table not initialized.');
@@ -327,8 +315,8 @@ $(document).ready(function() {
             return;
         }
 
-        table.search(''); // Clear global DataTables search
-        while ($.fn.dataTable.ext.search.length > 0) { $.fn.dataTable.ext.search.pop(); } // Clear custom filters
+        table.search('');
+        while ($.fn.dataTable.ext.search.length > 0) { $.fn.dataTable.ext.search.pop(); }
 
         const filters = [];
         $('#multiSearchFields .multi-search-row').each(function() {
@@ -337,8 +325,11 @@ $(document).ready(function() {
             let searchTerm = '';
             if (columnConfig) {
                 searchTerm = columnConfig.useDropdown ?
-                    $(this).find('.search-value-select').val() : // Value from hidden select
-                    $(this).find('.search-input').val().trim();   // Value from text input
+                    $(this).find('.search-value-select').val() :
+                    $(this).find('.search-input').val().trim();
+
+                // DEBUG: Log inspected filter field
+                console.log('DEBUG: Inspecting filter field: Column Title=', columnConfig.title, 'Is Dropdown=', columnConfig.useDropdown, 'Search Term from UI=', searchTerm);
 
                 if (searchTerm) {
                     filters.push({
@@ -348,14 +339,16 @@ $(document).ready(function() {
                 }
             }
         });
+        // DEBUG: Log collected filters
+        console.log('DEBUG: Active filters collected:', filters);
 
         let criteriaText = operator === 'AND' ? 'Criteria: All filters (AND)' : 'Criteria: Any filter (OR)';
         if (filters.length > 0) {
             criteriaText += ` (${filters.length} active filter(s))`;
             $.fn.dataTable.ext.search.push(
                 function(settings, apiData, dataIndex) {
-                    if (settings.nTable.id !== table.table().node().id) return true; // Ensure filter applies only to this table
-                    const rowData = table.row(dataIndex).data(); // Original data object for the row
+                    if (settings.nTable.id !== table.table().node().id) return true;
+                    const rowData = table.row(dataIndex).data();
                     if (!rowData) return false;
 
                     const logicFn = operator === 'OR' ? filters.some.bind(filters) : filters.every.bind(filters);
@@ -368,7 +361,7 @@ $(document).ready(function() {
                             cellValue = rowData[filter.dataProp] || '';
                             return String(cellValue).toLowerCase() === filter.term.toLowerCase();
                         } else {
-                            cellValue = apiData[filter.col] || ''; // DataTables' prepared search data for the column
+                            cellValue = apiData[filter.col] || '';
                             return String(cellValue).toLowerCase().includes(filter.term.toLowerCase());
                         }
                     });
@@ -377,23 +370,16 @@ $(document).ready(function() {
         } else { criteriaText = 'Criteria: All results (no active filters)'; }
 
         $searchCriteriaText.text(criteriaText);
-        table.draw(); // This will trigger preDraw and drawCallback
-    }
-
-    function applyMultiSearch() {
-        clearTimeout(multiSearchDebounceTimer);
-        showLoader('Applying filters...');
-        multiSearchDebounceTimer = setTimeout(_executeMultiSearchLogic, DEBOUNCE_DELAY);
+        table.draw();
     }
 
     $('#clearFilters').on('click', () => {
         showLoader('Clearing filters...');
         setTimeout(() => {
             if (table) {
-                $(table.table().header()).find('tr:eq(1) th input').val(''); // Clear individual column inputs
-                table.search('').columns().search(''); // Clear DataTables internal searches
+                $(table.table().header()).find('tr:eq(1) th input').val('');
+                table.search('').columns().search('');
             }
-            // Clean up event handlers on custom dropdowns before removing rows
             $('#multiSearchFields .multi-search-row').each(function() {
                 $(this).find('.custom-dropdown-text-input').off();
                 $(this).find('.custom-options-list').off();
@@ -401,18 +387,17 @@ $(document).ready(function() {
             $('#multiSearchFields').empty();
 
             if (allData && allData.length > 0) {
-                setupMultiSearch(); // Re-adds one default search field
+                setupMultiSearch();
             } else {
                 $('#searchCriteria').text('No data loaded.');
             }
-            while ($.fn.dataTable.ext.search.length > 0) { $.fn.dataTable.ext.search.pop(); } // Clear custom filters
+            while ($.fn.dataTable.ext.search.length > 0) { $.fn.dataTable.ext.search.pop(); }
 
             if (table) table.draw();
-            else hideLoader(); // Hide loader if no table to draw
+            else hideLoader();
 
             $('#alertPanel').empty();
-            // Reset column visibility to default
-            const defaultVisibleCols = [1, 2, 3, 6]; // Indices: Name, Email, Job Title, Licenses
+            const defaultVisibleCols = [1, 2, 3, 6];
             $('#colContainer .col-vis').each(function() {
                 const idx = +$(this).data('col');
                 const isDefaultVisible = defaultVisibleCols.includes(idx);
@@ -422,14 +407,14 @@ $(document).ready(function() {
                 }
                 $(this).prop('checked', isDefaultVisible);
             });
-             if (!table && !(allData && allData.length > 0)) { // Update criteria if no data and no table
+             if (!table && !(allData && allData.length > 0)) {
                  $('#searchCriteria').text('No data loaded. Please load a JSON file to start.');
              }
         }, 50);
     });
 
     function downloadCsv(csvContent, fileName) {
-        const bom = "\uFEFF"; // Byte Order Mark for UTF-8
+        const bom = "\uFEFF";
         const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         if (link.download !== undefined) {
@@ -457,7 +442,7 @@ $(document).ready(function() {
                 return;
             }
             const visibleColumns = [];
-            table.columns(':visible').every(function() { // Iterate over visible columns
+            table.columns(':visible').every(function() {
                 const columnConfig = table.settings()[0].aoColumns[this.index()];
                 const colTitle = $(table.column(this.index()).header()).text() || columnConfig.title;
                 const dataProp = columnConfig.mData;
@@ -493,14 +478,14 @@ $(document).ready(function() {
         setTimeout(() => {
             const lines = [];
             if (nameConflicts.size) {
-                lines.push(['NAME+LOCATION CONFLICTS']); // CSV Section Header
-                lines.push(['Name', 'Location'].map(h => escapeCsvValue(h))); // Column Headers
+                lines.push(['NAME+LOCATION CONFLICTS']);
+                lines.push(['Name', 'Location'].map(h => escapeCsvValue(h)));
                 nameConflicts.forEach(key => lines.push(key.split('|||').map(value => escapeCsvValue(value))));
-                lines.push([]); // Empty line for separation
+                lines.push([]);
             }
             if (dupLicUsers.size) {
-                lines.push(['USERS with Duplicate Licenses']); // CSV Section Header
-                lines.push(['Name', 'Location', 'Duplicate Licenses', 'Has Paid License?'].map(h => escapeCsvValue(h))); // Column Headers
+                lines.push(['USERS with Duplicate Licenses']);
+                lines.push(['Name', 'Location', 'Duplicate Licenses', 'Has Paid License?'].map(h => escapeCsvValue(h)));
                 allData.filter(user => dupLicUsers.has(user.Id)).forEach(user => {
                     const licCount = {}, duplicateLicNames = [];
                     (user.Licenses || []).forEach(l => licCount[l.LicenseName] = (licCount[l.LicenseName] || 0) + 1);
@@ -509,7 +494,7 @@ $(document).ready(function() {
                     const hasPaid = (user.Licenses || []).some(l => !(l.LicenseName || '').toLowerCase().includes('free'));
                     lines.push([
                         escapeCsvValue(user.DisplayName), escapeCsvValue(user.OfficeLocation),
-                        escapeCsvValue(joinedDups, true), // Force quotes if it contains semicolons
+                        escapeCsvValue(joinedDups, true),
                         escapeCsvValue(hasPaid ? 'Yes' : 'No')
                     ]);
                 });
@@ -521,16 +506,10 @@ $(document).ready(function() {
         }, 50);
     });
 
-
-    // --- Initial Data Loading with Web Worker ---
     function processDataWithWorker(rawData) {
         showLoader('Validating and processing data (this may take a moment)...');
-
         const workerScript = `
-            // Minimal nameKey for worker context
             const nameKeyInternal = u => \`\${u.DisplayName || ''}|||\${u.OfficeLocation || ''}\`;
-
-            // --- validateJsonForWorker (copied from main thread, ensure it's self-contained) ---
             function validateJsonForWorker(data) {
                 if (!Array.isArray(data)) {
                     return { error: 'Invalid JSON: Must be an array of objects.', validatedData: [] };
@@ -549,8 +528,6 @@ $(document).ready(function() {
                 } : null).filter(x => x);
                 return { validatedData };
             }
-
-            // --- findIssuesForWorker (copied from main thread, self-contained) ---
             function findIssuesForWorker(data) {
                 const nameMap = new Map();
                 const dupSet = new Set();
@@ -574,8 +551,6 @@ $(document).ready(function() {
                 const conflictingNameKeysArray = [...nameMap].filter(([, count]) => count > 1).map(([key]) => key);
                 return { nameConflictsArray: conflictingNameKeysArray, dupLicUsersArray: Array.from(dupSet) };
             }
-
-            // --- calculateUniqueFieldValuesForWorker (copied, self-contained) ---
             function calculateUniqueFieldValuesForWorker(data, config) {
                 const localUniqueFieldValues = {};
                 config.forEach(colConfig => {
@@ -590,9 +565,8 @@ $(document).ready(function() {
                 });
                 return { uniqueFieldValues: localUniqueFieldValues };
             }
-
             self.onmessage = function(e) {
-                const { rawData, searchableColumnsConfig: workerSearchableColumnsConfig } = e.data; // Renamed to avoid confusion with outer scope
+                const { rawData, searchableColumnsConfig: workerSearchableColumnsConfig } = e.data;
                 try {
                     const validationResult = validateJsonForWorker(rawData);
                     if (validationResult.error) {
@@ -601,13 +575,11 @@ $(document).ready(function() {
                     }
                     const validatedData = validationResult.validatedData;
                     if (validatedData.length === 0) {
-                         self.postMessage({ validatedData: [], nameConflictsArray: [], dupLicUsersArray: [], uniqueFieldValues: {} }); // Send empty arrays
+                         self.postMessage({ validatedData: [], nameConflictsArray: [], dupLicUsersArray: [], uniqueFieldValues: {} });
                          return;
                     }
-
                     const issues = findIssuesForWorker(validatedData);
                     const uniqueValues = calculateUniqueFieldValuesForWorker(validatedData, workerSearchableColumnsConfig);
-                    
                     self.postMessage({
                         validatedData: validatedData,
                         nameConflictsArray: issues.nameConflictsArray,
@@ -618,7 +590,7 @@ $(document).ready(function() {
                 } catch (err) {
                     self.postMessage({ error: 'Error in Web Worker: ' + err.message + '\\n' + err.stack });
                 } finally {
-                    self.close(); // Terminate worker after processing
+                    self.close();
                 }
             };
         `;
@@ -626,7 +598,7 @@ $(document).ready(function() {
         const worker = new Worker(URL.createObjectURL(blob));
 
         worker.onmessage = function(e) {
-            URL.revokeObjectURL(blob); // Clean up blob URL
+            URL.revokeObjectURL(blob);
             const { validatedData: processedData, nameConflictsArray, dupLicUsersArray, uniqueFieldValues: uFValues, error } = e.data;
 
             if (error) {
@@ -643,10 +615,10 @@ $(document).ready(function() {
 
             if (processedData && processedData.length > 0) {
                 showLoader('Rendering table...');
-                setTimeout(() => { // Allow loader message to update before heavy table init
+                setTimeout(() => {
                     initTable(processedData);
                     setupMultiSearch();
-                    $('#searchCriteria').text(`Data loaded (${processedData.length} users). Use filters to refine.`);
+                    $('#searchCriteria').text(\`Data loaded (\${processedData.length} users). Use filters to refine.\`);
                 }, 50);
             } else {
                 hideLoader();
@@ -661,28 +633,23 @@ $(document).ready(function() {
         worker.onerror = function(e) {
             URL.revokeObjectURL(blob);
             hideLoader();
-            console.error(`Error in Web Worker: Line ${e.lineno} in ${e.filename}: ${e.message}`);
+            console.error(\`Error in Web Worker: Line \${e.lineno} in \${e.filename}: \${e.message}\`);
             alert('A critical error occurred during data processing. Please check the console.');
             $('#searchCriteria').text('Critical error loading data.');
         };
-
-        // Pass the main searchableColumnsConfig to the worker
         worker.postMessage({ rawData: rawData, searchableColumnsConfig: searchableColumnsConfig });
     }
 
-    // --- Initial Load Trigger ---
     try {
-        // Check if 'userData' is defined globally (e.g., in a <script> tag)
         if (typeof userData !== 'undefined' && Array.isArray(userData)) {
             processDataWithWorker(userData);
         } else {
-            // Fallback or primary method: use file input
             $('#jsonFileInput').on('change', function(event) {
                 const file = event.target.files[0];
                 if (file) {
                     showLoader('Reading JSON file...');
                     const reader = new FileReader();
-                    reader.onload = function(e_reader) { // Renamed to avoid conflict with worker's e
+                    reader.onload = function(e_reader) {
                         try {
                             const jsonData = JSON.parse(e_reader.target.result);
                             processDataWithWorker(jsonData);
@@ -707,9 +674,9 @@ $(document).ready(function() {
             } else {
                  $('#searchCriteria').text('Please load a user JSON file.');
             }
-            hideLoader(); // Hide if no initial userData and no file input interaction yet
+            hideLoader();
         }
-    } catch (error) { // Catch errors during initial setup
+    } catch (error) {
         hideLoader();
         alert('Error initiating data loading: ' + error.message);
         console.error("Initial loading error:", error);
