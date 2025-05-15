@@ -135,8 +135,8 @@ $(document).ready(function() {
       data: allData, deferRender: true, pageLength: 25, orderCellsTop: true,
       columns: [
         { data: 'Id', title: 'ID', visible: false }, { data: 'DisplayName', title: 'Nome', visible: true },
-        { data: 'Email', title: 'Email', visible: true }, { data: 'JobTitle', title: 'Cargo', visible: true },
-        { data: 'OfficeLocation', title: 'Local', visible: false },
+        { data: 'Email', title: 'Email', visible: true }, { data: 'JobTitle', title: 'Cargo', visible: true }, // Alterado para PT-BR
+        { data: 'OfficeLocation', title: 'Local', visible: false }, // Alterado para PT-BR
         { data: 'BusinessPhones', title: 'Telefones', visible: false, render: p => Array.isArray(p) ? p.join('; ') : (p || '') },
         { data: 'Licenses', title: 'Licenças', visible: true, render: l => Array.isArray(l) ? l.map(x => x.LicenseName || '').filter(name => name).join(', ') : '' }
       ],
@@ -161,41 +161,41 @@ $(document).ready(function() {
     $(table.table().node()).on('preDraw.dt', showLoader).on('draw.dt', hideLoader);
   }
 
-  // --- NOVO: Função para UI de dropdown customizado ---
+  // --- CORRIGIDO e REFINADO: Função para UI de dropdown customizado ---
   function updateSearchFieldUI($row) {
     const selectedColIndex = $row.find('.column-select').val();
     const columnConfig = searchableColumnsConfig.find(c => c.index == selectedColIndex);
 
-    const $searchInput = $row.find('.search-input'); // Input de texto padrão
+    const $searchInput = $row.find('.search-input');
     const $customDropdownContainer = $row.find('.custom-dropdown-container');
-    const $customDropdownTextInput = $row.find('.custom-dropdown-text-input'); // Input para dropdown customizado
-    const $customOptionsList = $row.find('.custom-options-list'); // Lista de opções do dropdown customizado
-    const $hiddenValueSelect = $row.find('.search-value-select'); // Select oculto que guarda o valor
+    const $customDropdownTextInput = $row.find('.custom-dropdown-text-input');
+    const $customOptionsList = $row.find('.custom-options-list');
+    const $hiddenValueSelect = $row.find('.search-value-select'); // Este é o <select> que deve permanecer oculto
 
-    // Limpa ouvintes de evento anteriores para evitar duplicatas
+    // Limpa ouvintes de evento anteriores para evitar acúmulo
     $customDropdownTextInput.off();
     $customOptionsList.off(); // Para eventos delegados
 
     if (columnConfig && columnConfig.useDropdown) {
-      $searchInput.hide(); // Esconde input padrão
-      $customDropdownContainer.show(); // Mostra container do dropdown customizado
-      $customDropdownTextInput.val(''); // Limpa texto do input customizado
+      $searchInput.hide(); // Esconde input de texto padrão
+      $customDropdownContainer.show(); // Mostra o container do nosso dropdown customizado
+      $customDropdownTextInput.val(''); // Limpa qualquer texto anterior do input customizado
       $customDropdownTextInput.attr('placeholder', `Digite ou selecione ${columnConfig.title.toLowerCase()}`);
-      $customOptionsList.hide().empty(); // Esconde e limpa lista de opções
-      $hiddenValueSelect.show().empty(); // Garante que o select oculto exista e esteja limpo (mas ele não será visível)
+      $customOptionsList.hide().empty(); // Garante que a lista de opções esteja oculta e vazia inicialmente
 
-      // Popula o select oculto com todas as opções únicas (fonte da verdade)
+      // IMPORTANTE: Popula o select oculto, mas ele DEVE permanecer oculto (style="display:none" no HTML)
+      $hiddenValueSelect.empty(); // Limpa opções anteriores
       $hiddenValueSelect.append($('<option>').val('').text('')); // Opção vazia padrão
       const allUniqueOptions = uniqueFieldValues[columnConfig.dataProp] || [];
       allUniqueOptions.forEach(val => {
         $hiddenValueSelect.append($('<option>').val(escapeHtml(val)).text(escapeHtml(val)));
       });
-      $hiddenValueSelect.val(''); // Garante que valor inicial seja limpo
+      $hiddenValueSelect.val(''); // Garante que o valor selecionado no select oculto esteja limpo
 
       // Evento: Digitando no input do dropdown customizado
       $customDropdownTextInput.on('input', function() {
         const searchTerm = $(this).val().toLowerCase();
-        $customOptionsList.empty().show();
+        $customOptionsList.empty().show(); // Mostra a lista e limpa opções anteriores
         const filteredOptions = allUniqueOptions.filter(opt => String(opt).toLowerCase().includes(searchTerm));
 
         if (filteredOptions.length === 0) {
@@ -210,36 +210,36 @@ $(document).ready(function() {
 
       // Evento: Foco no input do dropdown customizado
       $customDropdownTextInput.on('focus', function() {
-        $(this).trigger('input'); // Dispara o 'input' para popular a lista
-        $customOptionsList.show(); // Garante que a lista seja exibida
+        $(this).trigger('input'); // Dispara o 'input' para popular/mostrar a lista
+        $customOptionsList.show();
       });
 
-      // Evento: Clique em um item da lista de opções customizada (delegação)
-      $customOptionsList.on('mousedown', '.custom-option-item', function(e) { // Usar mousedown para registrar antes do blur
-        e.preventDefault(); // Previne que o blur do input esconda a lista antes do click
-        if ($(this).hasClass('no-results')) return;
+      // Evento: Clique em um item da lista (usando mousedown para registrar antes do blur do input)
+      $customOptionsList.on('mousedown', '.custom-option-item', function(e) {
+        e.preventDefault(); // Previne que o blur feche a lista antes do clique
+        if ($(this).hasClass('no-results')) return; // Não faz nada se for a msg "sem resultados"
 
         const selectedText = $(this).text();
         const selectedValue = $(this).data('value');
 
-        $customDropdownTextInput.val(selectedText);
-        $hiddenValueSelect.val(selectedValue).trigger('change'); // ATUALIZA O SELECT OCULTO E DISPARA A BUSCA
-        $customOptionsList.hide();
+        $customDropdownTextInput.val(selectedText); // Atualiza o texto do input visível
+        $hiddenValueSelect.val(selectedValue).trigger('change'); // ATUALIZA O VALOR DO SELECT OCULTO e dispara o 'change'
+        $customOptionsList.hide(); // Esconde a lista
       });
 
-      // Evento: Esconder a lista ao perder o foco (blur)
+      // Evento: Esconder a lista ao perder o foco (blur) do input de texto
       let blurTimeout;
       $customDropdownTextInput.on('blur', function() {
-        clearTimeout(blurTimeout);
-        blurTimeout = setTimeout(() => { // Atraso para permitir clique no item da lista
+        clearTimeout(blurTimeout); // Limpa timeout anterior se houver
+        blurTimeout = setTimeout(() => {
           $customOptionsList.hide();
-        }, 150); // Ajuste o tempo conforme necessário
+        }, 150); // Pequeno atraso para permitir que o 'mousedown' no item da lista seja processado
       });
 
-    } else { // Configuração para input de texto padrão
-      $searchInput.show();
-      $customDropdownContainer.hide();
-      $hiddenValueSelect.empty().hide(); // Esconde e limpa select oculto (não usado para texto)
+    } else { // Configuração para input de texto padrão (não dropdown)
+      $searchInput.show().val(''); // Mostra e limpa input padrão
+      $customDropdownContainer.hide(); // Esconde container do dropdown customizado
+      $hiddenValueSelect.empty() // Não precisa do .hide() aqui, pois o estilo CSS já o oculta. Apenas limpa.
       $searchInput.attr('placeholder', 'Termo...');
     }
   }
@@ -252,7 +252,7 @@ $(document).ready(function() {
         .map(c => `<option value="${c.index}">${escapeHtml(c.title)}</option>`)
         .join('');
 
-      // --- NOVO: Estrutura HTML da linha de busca com placeholders para dropdown customizado ---
+      // Estrutura HTML da linha de busca. O .search-value-select DEVE ter display:none.
       const $row = $(`
         <div class="multi-search-row">
             <select class="column-select">${columnOptions}</select>
@@ -263,56 +263,53 @@ $(document).ready(function() {
                 <input type="text" class="custom-dropdown-text-input" autocomplete="off" />
                 <div class="custom-options-list" style="display:none;"></div>
             </div>
-            <select class="search-value-select" style="display: none;"></select>
+            <select class="search-value-select" style="display: none;"></select> {/* ESTE DEVE ESTAR SEMPRE OCULTO */}
 
             <button class="remove-field" title="Remover filtro"><i class="fas fa-trash-alt"></i></button>
         </div>
       `);
 
       $container.append($row);
-      updateSearchFieldUI($row); // Configura o tipo de input correto
+      updateSearchFieldUI($row);
 
       $row.find('.column-select').on('change', function() {
-        // Limpa os valores dos inputs visuais e do select oculto antes de reconfigurar
-        $row.find('.search-input').val('');
-        $row.find('.custom-dropdown-text-input').val('');
-        // $hiddenValueSelect é limpo dentro de updateSearchFieldUI se for dropdown
-
         updateSearchFieldUI($row); // Reconfigura a UI para o novo tipo de coluna
 
-        // Dispara a busca com o valor limpo para o novo tipo de input
         const selectedColIndex = $row.find('.column-select').val();
         const columnConfig = searchableColumnsConfig.find(c => c.index == selectedColIndex);
 
         if (columnConfig && columnConfig.useDropdown) {
-            // O select oculto já foi limpo e re-populado em updateSearchFieldUI
-            // Dispara 'change' para que applyMultiSearch use o valor vazio (ou o placeholder)
+            // Para dropdown customizado, limpa o valor do select oculto e dispara 'change'
+            // O input visual (.custom-dropdown-text-input) já é limpo por updateSearchFieldUI
             $row.find('.search-value-select').val('').trigger('change');
         } else {
-            // Para input de texto padrão, dispara 'input' para que applyMultiSearch use o valor vazio
+            // Para input de texto padrão, limpa seu valor e dispara 'input'
             $row.find('.search-input').val('').trigger('input');
         }
       });
 
-      // Ouvintes para disparar a busca
-      $row.find('.search-input').on('input change', applyMultiSearch); // Para input de texto padrão
-      $row.find('.search-value-select').on('change', applyMultiSearch); // Para o select oculto (atualizado pelo dropdown customizado)
+      $row.find('.search-input').on('input change', applyMultiSearch);
+      $row.find('.search-value-select').on('change', applyMultiSearch); // Este é crucial
 
       $row.find('.remove-field').on('click', function() {
-        // Limpa ouvintes específicos do dropdown customizado antes de remover
         const $multiSearchRow = $(this).closest('.multi-search-row');
-        $multiSearchRow.find('.custom-dropdown-text-input').off();
+        $multiSearchRow.find('.custom-dropdown-text-input').off(); // Limpa handlers customizados
         $multiSearchRow.find('.custom-options-list').off();
-
         $multiSearchRow.remove();
         applyMultiSearch();
       });
     }
     $('#addSearchField').off('click').on('click', addSearchField);
     $('#multiSearchOperator').off('change').on('change', applyMultiSearch);
-    if ($container.children().length === 0 && allData.length > 0) { addSearchField(); } // Adiciona um campo se houver dados
-    else if ($container.children().length === 0 && allData.length === 0) { $('#searchCriteria').text('Nenhum dado carregado.');}
-    _executeMultiSearchLogic();
+
+    if ($container.children().length === 0) {
+        if (allData && allData.length > 0) { // Adiciona um campo inicial somente se houver dados
+            addSearchField();
+        } else {
+            $('#searchCriteria').text('Nenhum dado carregado. Carregue um arquivo JSON para começar.');
+        }
+    }
+    _executeMultiSearchLogic(); // Aplica a lógica de busca inicial (pode não haver filtros)
   }
 
   function _executeMultiSearchLogic() {
@@ -331,7 +328,7 @@ $(document).ready(function() {
       let searchTerm = '';
       if (columnConfig) {
         searchTerm = columnConfig.useDropdown ?
-          $(this).find('.search-value-select').val() : // Lê do select oculto
+          $(this).find('.search-value-select').val() : // Lê do select OCULTO
           $(this).find('.search-input').val().trim();
         if (searchTerm) {
           filters.push({
@@ -351,14 +348,14 @@ $(document).ready(function() {
           if (!rowData) return false;
           const logicFn = operator === 'OR' ? filters.some.bind(filters) : filters.every.bind(filters);
           return logicFn(filter => {
-            if (filter.dataProp === 'Licenses') {
+            if (filter.dataProp === 'Licenses') { // Lógica especial para Licenças (array de objetos)
               return (rowData.Licenses && Array.isArray(rowData.Licenses)) ?
                 rowData.Licenses.some(l => (l.LicenseName || '').toLowerCase() === filter.term.toLowerCase()) : false;
-            } else if (filter.isDropdown) {
+            } else if (filter.isDropdown) { // Comparação exata para outros dropdowns
               const cellValue = rowData[filter.dataProp] || '';
               return String(cellValue).toLowerCase() === filter.term.toLowerCase();
-            } else {
-              const cellValue = apiData[filter.col] || '';
+            } else { // Comparação "contém" para inputs de texto
+              const cellValue = apiData[filter.col] || ''; // Usa dados preparados pelo DataTables para busca em texto
               return String(cellValue).toLowerCase().includes(filter.term.toLowerCase());
             }
           });
@@ -376,17 +373,16 @@ $(document).ready(function() {
 
   $('#clearFilters').on('click', () => {
     if (table) { $(table.table().header()).find('tr:eq(1) th input').val(''); table.search('').columns().search(''); }
-    // Limpa ouvintes de dropdown customizado antes de esvaziar
-    $('#multiSearchFields .multi-search-row').each(function() {
+    $('#multiSearchFields .multi-search-row').each(function() { // Limpa handlers antes de remover
         $(this).find('.custom-dropdown-text-input').off();
         $(this).find('.custom-options-list').off();
     });
     $('#multiSearchFields').empty();
-    if (allData.length > 0) { setupMultiSearch(); } else { $('#searchCriteria').text('Nenhum dado carregado.'); }
+    if (allData && allData.length > 0) { setupMultiSearch(); } else { $('#searchCriteria').text('Nenhum dado carregado.'); }
     while ($.fn.dataTable.ext.search.length > 0) { $.fn.dataTable.ext.search.pop(); }
     if(table) table.draw();
     $('#alertPanel').empty();
-    const defaultVisibleCols = [1, 2, 3, 6];
+    const defaultVisibleCols = [1, 2, 3, 6]; // Colunas visíveis por padrão (Índices: Nome, Email, Cargo, Licenças)
     $('#colContainer .col-vis').each(function() {
       const idx = +$(this).data('col'); const isDefaultVisible = defaultVisibleCols.includes(idx);
       if (table && idx >= 0 && idx < table.columns().nodes().length) { try { table.column(idx).visible(isDefaultVisible); } catch(e) { console.warn("Erro ao resetar visibilidade da coluna:", idx, e); } }
@@ -394,16 +390,95 @@ $(document).ready(function() {
     });
   });
 
-  function downloadCsv(csvContent, fileName) { /* ... (sem alterações) ... */ }
-  $('#exportCsv').on('click', () => { /* ... (sem alterações) ... */ });
-  $('#exportIssues').on('click', () => { /* ... (sem alterações) ... */ });
+  // Funções de download e exportação (sem alterações nesta rodada)
+  function downloadCsv(csvContent, fileName) {
+    const bom = "\uFEFF";
+    const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url); link.setAttribute('download', fileName);
+      link.style.visibility = 'hidden'; document.body.appendChild(link);
+      link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
+    } else { alert("Seu navegador não suporta o download direto de arquivos."); }
+  }
+  $('#exportCsv').on('click', () => {
+    if (!table) return alert('Tabela não inicializada. Nenhum dado carregado.');
+    const rowsToExport = table.rows({ search: 'applied' }).data().toArray();
+    if (!rowsToExport.length) return alert('Nenhum registro para exportar com os filtros atuais.');
+    const visibleColumns = [];
+    table.columns(':visible').every(function() {
+      const columnTitle = $(table.table().header()).find('tr:eq(0) th').eq(this.index()).text();
+      const dataProp = table.settings()[0].aoColumns[this.index()].mData;
+      visibleColumns.push({ title: columnTitle, dataProp: dataProp });
+    });
+    const headerRow = visibleColumns.map(col => escapeCsvValue(col.title)).join(',');
+    const csvRows = rowsToExport.map(rowData => {
+      return visibleColumns.map(col => {
+        let cellData = rowData[col.dataProp]; let shouldForceQuotes = false;
+        if (col.dataProp === 'BusinessPhones') {
+          cellData = Array.isArray(cellData) ? cellData.join('; ') : (cellData || '');
+          if (String(cellData).match(/[,"\n\r;]/)) shouldForceQuotes = true;
+        } else if (col.dataProp === 'Licenses') {
+          const licensesArray = (rowData.Licenses && Array.isArray(rowData.Licenses)) ?
+            rowData.Licenses.map(l => l.LicenseName || '').filter(name => name) : [];
+          cellData = licensesArray.length > 0 ? licensesArray.join('; ') : '';
+          if (String(cellData).match(/[,"\n\r;]/)) shouldForceQuotes = true;
+        } else { if (String(cellData).match(/[,"\n\r]/)) shouldForceQuotes = true; }
+        return escapeCsvValue(cellData, shouldForceQuotes);
+      }).join(',');
+    });
+    const csvContent = [headerRow, ...csvRows].join('\n');
+    downloadCsv(csvContent, 'license_report.csv');
+  });
+  $('#exportIssues').on('click', () => {
+    if (!allData.length) return alert('Nenhum dado carregado para gerar o relatório de problemas.');
+    const lines = [];
+    if (nameConflicts.size) {
+      lines.push(['CONFLITOS DE NOME+LOCALIZAÇÃO']);
+      lines.push(['Nome', 'Localização'].map(h => escapeCsvValue(h)));
+      nameConflicts.forEach(key => lines.push(key.split('|||').map(value => escapeCsvValue(value))));
+      lines.push([]);
+    }
+    if (dupLicUsers.size) {
+      lines.push(['USUÁRIOS com Licenças Duplicadas']);
+      lines.push(['Nome', 'Localização', 'Licenças Duplicadas', 'Possui Licença Paga?'].map(h => escapeCsvValue(h)));
+      allData.filter(user => dupLicUsers.has(user.Id)).forEach(user => {
+        const licCount = {}, duplicateLicNames = [];
+        (user.Licenses || []).forEach(l => licCount[l.LicenseName] = (licCount[l.LicenseName] || 0) + 1);
+        Object.entries(licCount).forEach(([licName, count]) => count > 1 && duplicateLicNames.push(licName));
+        const joinedDups = duplicateLicNames.join('; ');
+        const hasPaid = (user.Licenses || []).some(l => !(l.LicenseName || '').toLowerCase().includes('free'));
+        lines.push([
+          escapeCsvValue(user.DisplayName), escapeCsvValue(user.OfficeLocation),
+          escapeCsvValue(joinedDups, joinedDups.includes(';') || joinedDups.match(/[,"\n\r]/)),
+          escapeCsvValue(hasPaid ? 'Sim' : 'Não')
+        ]);
+      });
+    }
+    if (!lines.length) { lines.push(['Nenhum problema detectado.']); }
+    const csvContent = lines.map(rowArray => rowArray.join(',')).join('\n');
+    downloadCsv(csvContent, 'issues_report.csv');
+  });
 
+
+  // --- Carregamento Inicial dos Dados ---
   try {
-    if (typeof userData === 'undefined') { throw new Error("Variável 'userData' não definida."); }
+    if (typeof userData === 'undefined') { // userData deve ser definido no seu HTML, ex: <script>const userData = [...];</script>
+      throw new Error("A variável 'userData' não está definida no HTML.");
+    }
     const validatedData = validateJson(userData);
     if (validatedData.length > 0) {
-      initTable(validatedData); setupMultiSearch();
+      initTable(validatedData);
+      setupMultiSearch(); // Configura o multi-search após a tabela estar pronta
       $('#searchCriteria').text(`Dados carregados (${validatedData.length} usuários). Use filtros para refinar.`);
-    } else { alert('Nenhum usuário válido nos dados.'); $('#searchCriteria').text('Nenhum dado válido carregado.'); }
-  } catch (error) { alert('Erro ao processar dados: ' + error.message); console.error("Erro:", error); $('#searchCriteria').text('Erro ao carregar dados.'); }
+    } else {
+      alert('Nenhum usuário válido encontrado nos dados. Verifique o arquivo JSON.');
+      $('#searchCriteria').text('Nenhum dado válido carregado.');
+    }
+  } catch (error) {
+    alert('Erro ao processar dados: ' + error.message + "\nPor favor, verifique o console para mais detalhes.");
+    console.error("Erro ao carregar ou processar dados:", error);
+    $('#searchCriteria').text('Erro ao carregar dados.');
+  }
 });
