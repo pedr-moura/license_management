@@ -1,4 +1,4 @@
-# 🔍 Listing Microsoft 365 Users and Licenses via Microsoft Graph
+# 🔍 Listing Microsoft 365 Users and Licenses using Microsoft Graph
 
 This PowerShell script connects to Microsoft Graph, queries all users with active licenses in the tenant, and groups the results by user, displaying detailed information such as name, email, phone, office location, and assigned licenses.
 
