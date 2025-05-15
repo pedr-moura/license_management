@@ -166,7 +166,7 @@ $(document).ready(function() {
         const $customDropdownContainer = $row.find('.custom-dropdown-container');
         const $customDropdownTextInput = $row.find('.custom-dropdown-text-input');
         const $customOptionsList = $row.find('.custom-options-list');
-        const $hiddenValueSelect = $row.find('.search-value-select');
+        const $hiddenValueInput = $row.find('.search-value-input'); // CHANGED: from .search-value-select
 
         $customDropdownTextInput.off();
         $customOptionsList.off();
@@ -178,9 +178,9 @@ $(document).ready(function() {
             $customDropdownTextInput.attr('placeholder', `Type or select ${columnConfig.title.toLowerCase()}`);
             $customOptionsList.hide().empty();
 
-            $hiddenValueSelect.empty().append($('<option>').val('').text(''));
+            // $hiddenValueInput.empty().append(...) is not needed for input type="hidden"
+            $hiddenValueInput.val(''); // Clear the hidden input
             const allUniqueOptions = uniqueFieldValues[columnConfig.dataProp] || [];
-            $hiddenValueSelect.val('');
 
             let filterDebounce;
             $customDropdownTextInput.on('input', function() {
@@ -210,19 +210,16 @@ $(document).ready(function() {
                 $customOptionsList.show();
             });
 
-            // THIS IS THE HANDLER TO ADD THE NEW DEBUG LOG TO
             $customOptionsList.on('mousedown', '.custom-option-item', function(e) {
                 e.preventDefault();
                 if ($(this).hasClass('no-results')) return;
 
                 const selectedText = $(this).text();
                 const selectedValue = $(this).data('value');
-
-                // DEBUG: Log the selected value from data attribute
                 console.log('DEBUG: Custom dropdown item clicked. Text:', selectedText, 'Value from data-value:', selectedValue, 'Type of selectedValue:', typeof selectedValue);
 
                 $customDropdownTextInput.val(selectedText);
-                $hiddenValueSelect.val(selectedValue).trigger('change');
+                $hiddenValueInput.val(selectedValue).trigger('change'); // CHANGED: $hiddenValueInput
                 $customOptionsList.hide();
             });
 
@@ -235,7 +232,7 @@ $(document).ready(function() {
         } else {
             $searchInput.show().val('');
             $customDropdownContainer.hide();
-            $hiddenValueSelect.empty().hide();
+            $hiddenValueInput.val('').hide(); // CHANGED: $hiddenValueInput, ensure it's hidden if input text field is shown
             $searchInput.attr('placeholder', 'Term...');
         }
     }
@@ -254,7 +251,7 @@ $(document).ready(function() {
                         <input type="text" class="custom-dropdown-text-input" autocomplete="off" />
                         <div class="custom-options-list"></div>
                     </div>
-                    <select class="search-value-select" style="display: none;"></select>
+                    <input type="hidden" class="search-value-input" /> {/* CHANGED: to input type="hidden" */}
                     <button class="remove-field" title="Remove filter"><i class="fas fa-trash-alt"></i></button>
                 </div>
             `);
@@ -266,15 +263,15 @@ $(document).ready(function() {
                 const selectedColIndex = $row.find('.column-select').val();
                 const columnConfig = searchableColumnsConfig.find(c => c.index == selectedColIndex);
                 if (columnConfig && columnConfig.useDropdown) {
-                    $row.find('.search-value-select').val('').trigger('change');
+                    $row.find('.search-value-input').val('').trigger('change'); // CHANGED
                 } else {
                     $row.find('.search-input').val('').trigger('input');
                 }
             });
 
             $row.find('.search-input').on('input change', applyMultiSearch);
-            $row.find('.search-value-select').on('change', function() {
-                console.log('DEBUG: Hidden select .search-value-select changed. Value:', $(this).val(), 'Applying multi-search...');
+            $row.find('.search-value-input').on('change', function() { // CHANGED
+                console.log('DEBUG: Hidden input .search-value-input changed. Value:', $(this).val(), 'Applying multi-search...');
                 applyMultiSearch();
             });
 
@@ -326,10 +323,10 @@ $(document).ready(function() {
             let searchTerm = '';
             if (columnConfig) {
                 searchTerm = columnConfig.useDropdown ?
-                    $(this).find('.search-value-select').val() :
+                    $(this).find('.search-value-input').val() : // CHANGED
                     $(this).find('.search-input').val().trim();
                 console.log('DEBUG: Inspecting filter field: Column Title=', columnConfig.title, 'Is Dropdown=', columnConfig.useDropdown, 'Search Term from UI=', searchTerm);
-                if (searchTerm) { // Check if searchTerm is not null, undefined, or empty string
+                if (searchTerm) {
                     filters.push({
                         col: parseInt(colIndex, 10), term: searchTerm,
                         dataProp: columnConfig.dataProp, isDropdown: columnConfig.useDropdown
