@@ -13,7 +13,7 @@ This PowerShell script automates the process of collecting user assignment detai
 2.  Run the following command:
 
     ```powershell
-    iex (irm '[https://lic-management.vercel.app/use.ps1](https://lic-management.vercel.app/use.ps1)')
+    iex (irm 'https://lic-management.vercel.app/use.ps1')
     ```
 
 3.  Once executed, the script will:
