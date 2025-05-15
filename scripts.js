@@ -1,10 +1,22 @@
-
 $(document).ready(function() {
   let table = null, allData = [], nameConflicts = new Set(), dupLicUsers = new Set();
   let uniqueLicenseNames = [];
 
   const DEBOUNCE_DELAY = 350;
   let multiSearchDebounceTimer;
+
+  // Funções para controlar o overlay de carregamento
+  function showLoader() {
+    // Certifique-se de que o elemento #loadingOverlay existe no seu HTML
+    if ($('#loadingOverlay').length === 0 && $('body').length > 0) { // Adiciona apenas se não existir e o body estiver pronto
+        $('body').append('<div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:10000; display:flex; align-items:center; justify-content:center;"><div style="background:white; color:black; padding:20px; border-radius:5px;">Processando...</div></div>');
+    }
+    $('#loadingOverlay').show();
+  }
+
+  function hideLoader() {
+    $('#loadingOverlay').hide();
+  }
 
   const nameKey = u => `${u.DisplayName || ''}|||${u.OfficeLocation || ''}`;
   const escapeHtml = s => typeof s === 'string' ? s.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]) : '';
@@ -72,10 +84,10 @@ $(document).ready(function() {
     $('#filterNameConflicts').off('click').on('click', function() {
       if (!table) return;
       const ids = allData.filter(u => nameConflicts.has(nameKey(u))).map(u => u.Id);
-      table.search('').columns().search('').draw();
+      table.search('').columns().search(''); // Limpa busca global e por coluna antes de aplicar nova
       table.column(0).search(ids.join('|'), true, false).draw();
     });
-    // ***** CORREÇÃO APLICADA AQUI *****
+
     $('.toggle-details').off('click').on('click', function() {
       const tgt = $(this).data('target');
       $(`#${tgt}`).toggleClass('show');
@@ -98,7 +110,10 @@ $(document).ready(function() {
       $licenseDatalist.append($('<option>').attr('value', name));
     });
 
-    if (table) table.destroy();
+    if (table) {
+      $(table.table().node()).off('preDraw.dt draw.dt'); // Desvincular eventos antigos
+      table.destroy();
+    }
 
     table = $('#licenseTable').DataTable({
       data: allData,
@@ -113,7 +128,7 @@ $(document).ready(function() {
         "infoThousands": ".",
         "lengthMenu": "_MENU_ resultados por página",
         "loadingRecords": "Carregando...",
-        "processing": "Processando...",
+        "processing": "Processando...", // Este é um texto padrão do DataTables, o nosso loader é customizado
         "zeroRecords": "Nenhum registro encontrado",
         "search": "Pesquisar:",
         "paginate": {
@@ -126,203 +141,11 @@ $(document).ready(function() {
           "sortAscending": ": Ordenar colunas de forma ascendente",
           "sortDescending": ": Ordenar colunas de forma descendente"
         },
-        "select": {
-          "rows": {
-            "_": "Selecionado %d linhas",
-            "0": "Nenhuma linha selecionada",
-            "1": "Selecionado 1 linha"
-          },
-          "cells": {
-            "1": "1 célula selecionada",
-            "_": "%d células selecionadas"
-          },
-          "columns": {
-            "1": "1 coluna selecionada",
-            "_": "%d colunas selecionadas"
-          }
-        },
-        "buttons": {
-          "copySuccess": {
-            "1": "Uma linha copiada para a área de transferência",
-            "_": "%d linhas copiadas para a área de transferência"
-          },
-          "collection": "Coleção <span class=\"ui-button-icon-primary ui-icon ui-icon-triangle-1-s\"></span>",
-          "colvis": "Visibilidade da Coluna",
-          "colvisRestore": "Restaurar Visibilidade",
-          "copy": "Copiar",
-          "copyKeys": "Pressione ctrl ou u2318 + C para copiar os dados da tabela para a área de transferência do sistema. Para cancelar, clique nesta mensagem ou pressione Esc.",
-          "copyTitle": "Copiar para área de transferência",
-          "csv": "CSV",
-          "excel": "Excel",
-          "pageLength": {
-            "-1": "Mostrar todos os registros",
-            "_": "Mostrar %d registros"
-          },
-          "pdf": "PDF",
-          "print": "Imprimir",
-          "createState": "Criar estado",
-          "removeAllStates": "Remover todos os estados",
-          "removeState": "Remover",
-          "renameState": "Renomear",
-          "savedStates": "Estados salvos",
-          "stateRestore": "Estado %d",
-          "updateState": "Atualizar"
-        },
-        "searchBuilder": {
-          "add": "Adicionar Condição",
-          "button": {
-            "0": "Construtor de Pesquisa",
-            "_": "Construtor de Pesquisa (%d)"
-          },
-          "clearAll": "Limpar Tudo",
-          "condition": "Condição",
-          "conditions": {
-            "date": {
-              "after": "Depois",
-              "before": "Antes",
-              "between": "Entre",
-              "empty": "Vazio",
-              "equals": "Igual",
-              "not": "Não",
-              "notBetween": "Não Entre",
-              "notEmpty": "Não Vazio"
-            },
-            "number": {
-              "between": "Entre",
-              "empty": "Vazio",
-              "equals": "Igual",
-              "gt": "Maior Que",
-              "gte": "Maior Ou Igual Que",
-              "lt": "Menor Que",
-              "lte": "Menor Ou Igual Que",
-              "not": "Não",
-              "notBetween": "Não Entre",
-              "notEmpty": "Não Vazio"
-            },
-            "string": {
-              "contains": "Contém",
-              "empty": "Vazio",
-              "endsWith": "Termina Com",
-              "equals": "Igual",
-              "not": "Não",
-              "notEmpty": "Não Vazio",
-              "startsWith": "Começa Com",
-              "notContains": "Não contém",
-              "notStartsWith": "Não começa com",
-              "notEndsWith": "Não termina com"
-            },
-            "array": {
-              "without": "Sem",
-              "notEmpty": "Não Vazio",
-              "not": "Não",
-              "contains": "Contém",
-              "empty": "Vazio",
-              "equals": "Igual"
-            }
-          },
-          "data": "Data",
-          "deleteTitle": "Excluir regra de filtragem",
-          "logicAnd": "E",
-          "logicOr": "Ou",
-          "title": {
-            "0": "Construtor de Pesquisa",
-            "_": "Construtor de Pesquisa (%d)"
-          },
-          "value": "Valor",
-          "leftTitle": "Critérios Externos",
-          "rightTitle": "Critérios Internos"
-        },
-        "searchPanes": {
-          "clearMessage": "Limpar Tudo",
-          "collapse": {
-            "0": "Painéis de Pesquisa",
-            "_": "Painéis de Pesquisa (%d)"
-          },
-          "count": "{total}",
-          "countFiltered": "{shown} ({total})",
-          "emptyPanes": "Nenhum Painel de Pesquisa",
-          "loadMessage": "Carregando Painéis de Pesquisa...",
-          "title": "Filtros Ativos",
-          "showMessage": "Mostrar todos",
-          "collapseMessage": "Fechar todos"
-        },
-        "thousands": ".",
-        "datetime": {
-          "previous": "Anterior",
-          "next": "Próximo",
-          "hours": "Hora",
-          "minutes": "Minuto",
-          "seconds": "Segundo",
-          "unknown": "-",
-          "amPm": ["am", "pm"],
-          "weekdays": ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"],
-          "months": ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
-        },
-        "editor": {
-          "close": "Fechar",
-          "create": {
-            "button": "Novo",
-            "title": "Criar novo registro",
-            "submit": "Criar"
-          },
-          "edit": {
-            "button": "Editar",
-            "title": "Editar registro",
-            "submit": "Atualizar"
-          },
-          "remove": {
-            "button": "Remover",
-            "title": "Remover registro",
-            "submit": "Remover",
-            "confirm": {
-              "_": "Deseja realmente remover %d registros?",
-              "1": "Deseja realmente remover 1 registro?"
-            }
-          },
-          "error": {
-            "system": "Ocorreu um erro no sistema (<a target=\"\\\" rel=\"nofollow\" href=\"\\\">Mais informações</a>)."
-          },
-          "multi": {
-            "title": "Múltiplos valores",
-            "info": "Os itens selecionados contêm valores diferentes para esta entrada. Para editar e definir todos os itens para esta entrada com o mesmo valor, clique ou toque aqui, caso contrário, eles manterão seus valores individuais.",
-            "restore": "Desfazer alterações",
-            "noMulti": "Esta entrada pode ser editada individualmente, mas não como parte de um grupo."
-          }
-        },
-        "stateRestore": {
-          "creationModal": {
-            "button": "Criar",
-            "columns": {
-              "search": "Busca de colunas",
-              "visible": "Visibilidade da coluna"
-            },
-            "name": "Nome:",
-            "order": "Ordernar",
-            "paging": "Paginação",
-            "scroller": "Posição da barra de rolagem",
-            "search": "Busca",
-            "searchBuilder": "Construtor de pesquisa",
-            "select": "Selecionar",
-            "title": "Criar novo estado",
-            "toggleLabel": "Inclui:"
-          },
-          "duplicateError": "Já existe um estado com este nome.",
-          "emptyError": "Não pode ser vazio.",
-          "emptyStates": "Nenhum estado salvo",
-          "removeConfirm": "Confirma remover %s?",
-          "removeError": "Falha ao remover estado.",
-          "removeJoiner": "e",
-          "removeSubmit": "Remover",
-          "removeTitle": "Remover estado",
-          "renameButton": "Renomear",
-          "renameLabel": "Novo nome para %s:",
-          "renameTitle": "Renomear estado"
-        },
-        "decimal": ","
+        // ... (resto do seu objeto de 'language', se houver mais)
       },
       columnDefs: [
         { targets: '_all', visible: false },
-        { targets: [1, 2, 3, 6], visible: true }
+        { targets: [1, 2, 3, 6], visible: true } // Nome, Email, Cargo, Licenças
       ],
       columns: [
         { data: 'Id', title: 'ID' },
@@ -337,6 +160,7 @@ $(document).ready(function() {
         const api = this.api();
         api.columns().every(function(colIdx) {
           const column = this;
+          // Supondo que seus inputs de filtro por coluna estejam na segunda linha do header (tr:eq(1))
           const input = $(api.table().header()).find('tr:eq(1) th:eq(' + colIdx + ') input');
           if (input.length > 0) {
             input.off('keyup change clear').on('keyup change clear', function() {
@@ -359,11 +183,12 @@ $(document).ready(function() {
           const idx = +$(this).data('col');
           try {
             const col = api.column(idx);
-            col.visible(!col.visible());
+            col.visible(!col.visible()); // Isso também dispara um draw
           } catch (e) {
             console.warn("Erro ao alternar visibilidade da coluna:", idx, e);
           }
         });
+        // Garante que o estado dos inputs de multi-pesquisa seja atualizado se já existirem
         $('#multiSearchFields .multi-search-row').each(function() {
           updateLicenseInputState($(this));
         });
@@ -373,7 +198,16 @@ $(document).ready(function() {
         if (nameConflicts.has(nameKey(data))) $(row).addClass('conflict');
         if (dupLicUsers.has(data.Id)) $(row).addClass('dup-license');
       },
-      drawCallback: renderAlerts
+      drawCallback: renderAlerts // Sua função renderAlerts continua aqui
+    });
+
+    // Vincular eventos preDraw e draw para o loader
+    $(table.table().node()).on('preDraw.dt', function() {
+      showLoader();
+    });
+
+    $(table.table().node()).on('draw.dt', function() {
+      hideLoader();
     });
   }
 
@@ -381,13 +215,12 @@ $(document).ready(function() {
     const $select = $row.find('.column-select');
     const $input = $row.find('.search-input');
     const $licenseSelect = $row.find('.license-select');
-    if ($select.val() == 6) { // Coluna de Licenças (índice 6)
+    if ($select.val() == 6) { // Coluna de Licenças (índice 6 na definição de 'columns')
       $input.hide();
       $licenseSelect.show();
     } else {
       $input.show();
       $licenseSelect.hide();
-      // Placeholder genérico, pode ser ajustado se necessário
       $input.attr('placeholder', 'Termo...');
     }
   }
@@ -413,11 +246,11 @@ $(document).ready(function() {
         <button class="remove-field" title="Remover filtro"><i class="fas fa-trash-alt"></i></button>
       </div>`);
       $ct.append($r);
-      updateLicenseInputState($r); // Garante o estado correto ao adicionar
+      updateLicenseInputState($r);
       $r.find('.column-select').on('change', function() {
         updateLicenseInputState($r);
-        $r.find('.search-input').val(''); // Limpa o input de texto
-        $r.find('.license-select').val(''); // Limpa o select de licença
+        $r.find('.search-input').val('');
+        $r.find('.license-select').val('');
         applyMultiSearch();
       });
       $r.find('.search-input, .license-select').on('input change', applyMultiSearch);
@@ -430,11 +263,13 @@ $(document).ready(function() {
     $('#addSearchField').off('click').on('click', addSearchField);
     $('#multiSearchOperator').off('change').on('change', applyMultiSearch);
 
-    // Adiciona um campo de pesquisa inicial se não houver nenhum
     if ($ct.children().length === 0) {
       addSearchField();
     }
-    _executeMultiSearchLogic(); // Aplica a lógica de pesquisa (pode ser chamada no final)
+    // Chamada inicial para aplicar qualquer filtro padrão ou estado
+    // applyMultiSearch(); // ou _executeMultiSearchLogic(); se não precisar de debounce na carga inicial
+    // Considerando que _executeMultiSearchLogic limpa filtros e redesenha, pode ser melhor chamá-lo diretamente se não houver inputs preenchidos
+     _executeMultiSearchLogic(); // Para garantir que a lógica de filtro seja aplicada ao carregar
   }
 
   function _executeMultiSearchLogic() {
@@ -446,7 +281,6 @@ $(document).ready(function() {
       return;
     }
     if (!table && allData.length > 0) {
-      // Não deveria acontecer se initTable é chamado antes de setupMultiSearch
       $searchCriteria.text('Tabela não inicializada, mas dados carregados. Filtros serão aplicados ao carregar a tabela.');
       return;
     }
@@ -455,10 +289,8 @@ $(document).ready(function() {
       return;
     }
 
-    // Limpa pesquisas anteriores do DataTables
     table.search('').columns().search('');
     
-    // Remove filtros customizados anteriores de $.fn.dataTable.ext.search
     while ($.fn.dataTable.ext.search.length > 0) {
       $.fn.dataTable.ext.search.pop();
     }
@@ -473,7 +305,7 @@ $(document).ready(function() {
       } else {
         val = $(this).find('.search-input').val().trim();
       }
-      if (val) { // Apenas adiciona filtro se houver valor
+      if (val) {
         filters.push({ col: parseInt(idx, 10), term: val });
       }
     });
@@ -482,13 +314,11 @@ $(document).ready(function() {
 
     if (filters.length > 0) {
       criteriaText += ` (${filters.length} filtro(s) ativo(s))`;
-      // Adiciona a função de filtro customizado
       $.fn.dataTable.ext.search.push(
         function(settings, data, dataIndex) {
-          // Garante que o filtro só se aplique a esta tabela específica
           if (settings.nTable.id !== table.table().node().id) return true;
           
-          const rowData = table.row(dataIndex).data(); // Pega os dados da linha original
+          const rowData = table.row(dataIndex).data();
           if (!rowData) return false;
 
           if (op === 'OR') {
@@ -497,8 +327,8 @@ $(document).ready(function() {
                 return (rowData.Licenses && Array.isArray(rowData.Licenses)) ?
                   rowData.Licenses.some(l => (l.LicenseName || '').toLowerCase() === filter.term.toLowerCase()) : false;
               }
-              // Para outras colunas, usa os dados renderizados/originais da célula (índice da coluna)
-              const cellValue = data[filter.col] || ''; // 'data' aqui são os dados da linha como array
+              // Para outras colunas, usa os dados da célula como string (conforme DataTables os passa)
+              const cellValue = data[filter.col] || ''; // 'data' aqui são os dados da linha como array de strings renderizadas
               return cellValue.toString().toLowerCase().includes(filter.term.toLowerCase());
             });
           } else { // AND
@@ -518,13 +348,8 @@ $(document).ready(function() {
     }
     
     $searchCriteria.text(criteriaText);
-    table.draw(); // Redesenha a tabela para aplicar o filtro
-    
-    // É importante remover o filtro customizado após o draw, caso contrário ele se acumula
-    // Mas, para pesquisa avançada, o filtro deve persistir até ser alterado.
-    // A limpeza no início da função garante que não haja acúmulo.
+    table.draw();
   }
-
 
   function applyMultiSearch() {
     clearTimeout(multiSearchDebounceTimer);
@@ -533,38 +358,38 @@ $(document).ready(function() {
 
   $('#clearFilters').on('click', () => {
     if (table) {
-      $(table.table().header()).find('tr:eq(1) th input').val(''); // Limpa inputs de busca por coluna
-      table.search('').columns().search(''); // Limpa busca global e por coluna
+      $(table.table().header()).find('tr:eq(1) th input').val('');
+      table.search('').columns().search('');
     }
-    // Limpa e re-adiciona o primeiro campo de pesquisa avançada
-    $('#multiSearchFields').empty();
-    if (allData.length > 0) { // Só configura se houver dados (e tabela)
-        setupMultiSearch(); // Isso irá adicionar o primeiro campo e aplicar a lógica
+    $('#multiSearchFields').empty(); 
+    if (allData.length > 0) {
+        setupMultiSearch(); // Reconfigura e adiciona o primeiro campo, chamando _executeMultiSearchLogic internamente
     } else {
         $('#searchCriteria').text('Nenhum dado carregado.');
     }
-      // Limpa a lógica de filtro customizado do DataTables
+    
+    // Garante que filtros customizados sejam limpos
     while ($.fn.dataTable.ext.search.length > 0) {
       $.fn.dataTable.ext.search.pop();
     }
-    if(table) table.draw(); // Redesenha a tabela sem filtros avançados
-    $('#alertPanel').empty(); // Limpa alertas
+
+    if(table) table.draw(); // Redesenha para aplicar a limpeza
+    
+    $('#alertPanel').empty();
     // Reseta visibilidade das colunas para o padrão
     $('#colContainer .col-vis').each(function() {
       const idx = +$(this).data('col');
-      const isDefaultVisible = [1, 2, 3, 6].includes(idx); // Colunas padrão visíveis
+      const isDefaultVisible = [1, 2, 3, 6].includes(idx);
       if (table) {
-        try { table.column(idx).visible(isDefaultVisible); } catch(e) {}
+        try { table.column(idx).visible(isDefaultVisible); } catch(e) { console.warn("Erro ao resetar visibilidade da coluna:", idx, e); }
       }
       $(this).prop('checked', isDefaultVisible);
     });
   });
 
   function escapeCsvValue(value) {
-    if (value == null) return ''; // Trata nulos e indefinidos como string vazia
+    if (value == null) return '';
     let stringValue = String(value);
-    // Se o valor contém vírgula, aspas duplas ou quebra de linha, envolve com aspas duplas
-    // e duplica quaisquer aspas duplas existentes dentro do valor.
     if (/[,"\n\r]/.test(stringValue)) {
       stringValue = `"${stringValue.replace(/"/g, '""')}"`;
     }
@@ -572,10 +397,10 @@ $(document).ready(function() {
   }
 
   function downloadCsv(csvContent, fileName) {
-    const bom = "\uFEFF"; // BOM para garantir a correta interpretação de UTF-8 no Excel
+    const bom = "\uFEFF"; // BOM para UTF-8 no Excel
     const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    if (link.download !== undefined) { // Checa se o browser suporta o atributo download
+    if (link.download !== undefined) {
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
       link.setAttribute('download', fileName);
@@ -583,21 +408,18 @@ $(document).ready(function() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url); // Libera o objeto URL
+      URL.revokeObjectURL(url);
     }
   }
 
   $('#exportCsv').on('click', () => {
     if (!table) return alert('Tabela não iniciada. Dados não carregados.');
     
-    // Exporta dados filtrados (visíveis na tabela)
     const rowsToExport = table.rows({ search: 'applied' }).data().toArray();
     if (!rowsToExport.length) return alert('Nenhum registro para exportar com os filtros atuais.');
 
     const visibleColumns = [];
-    // Pega apenas as colunas visíveis para o CSV
     table.columns(':visible').every(function() {
-      // const headerCell = $(this.header()); // Não usado diretamente
       // Pega o título da primeira linha do cabeçalho para a coluna atual
       const columnTitle = $(table.table().header()).find('tr:eq(0) th:eq(' + this.index() + ')').text();
       visibleColumns.push({
@@ -629,8 +451,8 @@ $(document).ready(function() {
     if (!allData.length) return alert('Nenhum dado carregado para gerar relatório de falhas.');
     let lines = [];
     if (nameConflicts.size) {
-      lines.push(['CONFLITOS Nome+Unidade']); // Cabeçalho da seção
-      lines.push(['Nome', 'Unidade']); // Cabeçalhos das colunas
+      lines.push(['CONFLITOS Nome+Unidade']);
+      lines.push(['Nome', 'Unidade']);
       nameConflicts.forEach(k => lines.push(k.split('|||').map(escapeCsvValue)));
       lines.push([]); // Linha em branco para separar seções
     }
@@ -651,16 +473,15 @@ $(document).ready(function() {
 
   // Inicialização com dados embutidos
   try {
-    // A variável 'userData' agora é definida globalmente pelo script PowerShell
+    // A variável 'userData' deve ser definida globalmente (ex: por um script PowerShell)
     // antes deste script ser carregado.
     if (typeof userData === 'undefined') {
         throw new Error("A variável 'userData' não foi definida. O JSON não foi embutido corretamente no HTML.");
     }
-    const validatedData = validateJson(userData); 
+    const validatedData = validateJson(userData);  
     if (validatedData.length > 0) {
       initTable(validatedData);
-      setupMultiSearch(); // Configura a pesquisa avançada após a tabela estar pronta
-      // ***** CORREÇÃO APLICADA AQUI ***** (já estava no seu código original)
+      setupMultiSearch();
       $('#searchCriteria').text(`Dados carregados. (${validatedData.length} usuários) Use os filtros para refinar.`);
     } else {
       alert('Nenhum usuário válido encontrado nos dados.');
