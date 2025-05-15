@@ -1,15 +1,9 @@
 $(document).ready(function() {
   let table = null, allData = [], nameConflicts = new Set(), dupLicUsers = new Set();
-  // let uniqueLicenseNames = []; // Replaced by uniqueFieldValues.Licenses
 
   const DEBOUNCE_DELAY = 350;
   let multiSearchDebounceTimer;
 
-  // Central configuration for multi-searchable columns
-  // index: The column index in DataTables
-  // title: Display name in the dropdown
-  // dataProp: The property name in the `allData` objects
-  // useDropdown: Boolean, true if this column should use a select dropdown for searching
   const searchableColumnsConfig = [
     { index: 0, title: 'ID', dataProp: 'Id', useDropdown: false },
     { index: 1, title: 'Name', dataProp: 'DisplayName', useDropdown: false },
@@ -17,12 +11,11 @@ $(document).ready(function() {
     { index: 3, title: 'Job Title', dataProp: 'JobTitle', useDropdown: true },
     { index: 4, title: 'Location', dataProp: 'OfficeLocation', useDropdown: true },
     { index: 5, title: 'Phones', dataProp: 'BusinessPhones', useDropdown: false },
-    { index: 6, title: 'Licenses', dataProp: 'Licenses', useDropdown: true } // Special handling for this dataProp
+    { index: 6, title: 'Licenses', dataProp: 'Licenses', useDropdown: true }
   ];
 
-  let uniqueFieldValues = {}; // Stores unique values for dropdown-enabled fields
+  let uniqueFieldValues = {};
 
-  // Functions to control the loading overlay
   function showLoader() {
     if ($('#loadingOverlay').length === 0 && $('body').length > 0) {
         $('body').append('<div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:10000; display:flex; align-items:center; justify-content:center;"><div style="background:white; color:black; padding:20px; border-radius:5px;">Processing...</div></div>');
@@ -34,13 +27,9 @@ $(document).ready(function() {
     $('#loadingOverlay').hide();
   }
 
-  // Key generator for Name + OfficeLocation conflicts
   const nameKey = u => `${u.DisplayName || ''}|||${u.OfficeLocation || ''}`;
-
-  // Escape HTML entities
   const escapeHtml = s => typeof s === 'string' ? s.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]) : '';
 
-  // Escape value for CSV, optionally forcing quotes if a semicolon is present
   function escapeCsvValue(value, forceQuotesOnSemicolon = false) {
     if (value == null) return '';
     let stringValue = String(value);
@@ -51,7 +40,6 @@ $(document).ready(function() {
     return stringValue;
   }
 
-  // Validate and normalize input JSON data
   function validateJson(data) {
     if (!Array.isArray(data)) {
       alert('Invalid JSON: Must be an array of objects.');
@@ -60,9 +48,9 @@ $(document).ready(function() {
     return data.map((u, i) => u && typeof u === 'object' ? {
       Id: u.Id || `unknown_${i}`,
       DisplayName: u.DisplayName || 'Unknown',
-      OfficeLocation: u.OfficeLocation || 'Unknown', // Ensure this exists
+      OfficeLocation: u.OfficeLocation || 'Unknown',
       Email: u.Email || '',
-      JobTitle: u.JobTitle || 'Unknown', // Ensure this exists
+      JobTitle: u.JobTitle || 'Unknown',
       BusinessPhones: Array.isArray(u.BusinessPhones) ? u.BusinessPhones : (typeof u.BusinessPhones === 'string' ? u.BusinessPhones.split('; ').filter(p => p) : []),
       Licenses: Array.isArray(u.Licenses) ? u.Licenses.map(l => ({
         LicenseName: l.LicenseName || `Lic_${i}_${Math.random().toString(36).substr(2, 5)}`,
@@ -71,7 +59,6 @@ $(document).ready(function() {
     } : null).filter(x => x);
   }
 
-  // Find data issues (Name+Location conflicts, duplicate Office licenses)
   function findIssues(data) {
     const nameMap = new Map();
     const dupSet = new Set();
@@ -80,15 +67,14 @@ $(document).ready(function() {
       'Microsoft 365 Business Standard', 'Microsoft 365 Business Premium',
       'Office 365 E3', 'Office 365 E5'
     ]);
-
     data.forEach(u => {
       const k = nameKey(u);
       nameMap.set(k, (nameMap.get(k) || 0) + 1);
       const licCount = new Map();
       (u.Licenses || []).forEach(l => {
         const baseName = (l.LicenseName || '').match(/^(Microsoft 365|Office 365)/)?.[0] ?
-                         (l.LicenseName.match(/^(Microsoft 365 E3|Microsoft 365 E5|Microsoft 365 Business Standard|Microsoft 365 Business Premium|Office 365 E3|Office 365 E5)/)?.[0] || l.LicenseName)
-                        : l.LicenseName;
+          (l.LicenseName.match(/^(Microsoft 365 E3|Microsoft 365 E5|Microsoft 365 Business Standard|Microsoft 365 Business Premium|Office 365 E3|Office 365 E5)/)?.[0] || l.LicenseName)
+          : l.LicenseName;
         if (baseName) {
           licCount.set(baseName, (licCount.get(baseName) || 0) + 1);
         }
@@ -101,7 +87,6 @@ $(document).ready(function() {
     return { nameConflicts: conflictingNameKeys, dupLicUsers: dupSet };
   }
 
-  // Render alert badges for detected issues
   function renderAlerts() {
     const $p = $('#alertPanel').empty();
     if (nameConflicts.size) {
@@ -112,9 +97,7 @@ $(document).ready(function() {
     if (dupLicUsers.size) {
       const list = allData.filter(u => dupLicUsers.has(u.Id)).map(u => {
         const licCount = {}, duplicateLicNames = [];
-        (u.Licenses || []).forEach(l => {
-            licCount[l.LicenseName] = (licCount[l.LicenseName] || 0) + 1
-        });
+        (u.Licenses || []).forEach(l => { licCount[l.LicenseName] = (licCount[l.LicenseName] || 0) + 1; });
         Object.entries(licCount).forEach(([licName, count]) => count > 1 && duplicateLicNames.push(licName));
         const hasPaid = (u.Licenses || []).some(l => !(l.LicenseName || '').toLowerCase().includes('free'));
         return `<li>${escapeHtml(u.DisplayName)} (${escapeHtml(u.OfficeLocation)}): ${escapeHtml(duplicateLicNames.join(', '))} — Paid: ${hasPaid ? 'Yes' : 'No'}</li>`;
@@ -138,12 +121,9 @@ $(document).ready(function() {
     });
   }
 
-  // Initialize the DataTables table
   function initTable(data) {
     allData = data;
     ({ nameConflicts, dupLicUsers } = findIssues(allData));
-
-    // Initialize uniqueFieldValues storage
     uniqueFieldValues = {};
     searchableColumnsConfig.forEach(colConfig => {
       if (colConfig.useDropdown) {
@@ -155,9 +135,6 @@ $(document).ready(function() {
         }
       }
     });
-
-    // Populate the datalist for license name input suggestions (if used elsewhere, e.g. a general license search input)
-    // This specific datalist might become less relevant if all license searching is through the multi-search select.
     if ($('#licenseDatalist').length === 0) {
       $('body').append('<datalist id="licenseDatalist"></datalist>');
     }
@@ -167,32 +144,21 @@ $(document).ready(function() {
         $licenseDatalist.append($('<option>').attr('value', escapeHtml(name)));
       });
     }
-
-
     if (table) {
       $(table.table().node()).off('preDraw.dt draw.dt');
       table.destroy();
     }
-
     table = $('#licenseTable').DataTable({
       data: allData,
-      deferRender: true,
-      pageLength: 25,
-      orderCellsTop: true,
+      deferRender: true, pageLength: 25, orderCellsTop: true,
       columns: [
         { data: 'Id', title: 'ID', visible: false },
         { data: 'DisplayName', title: 'Name', visible: true },
         { data: 'Email', title: 'Email', visible: true },
         { data: 'JobTitle', title: 'Job Title', visible: true },
         { data: 'OfficeLocation', title: 'Location', visible: false },
-        {
-          data: 'BusinessPhones', title: 'Phones', visible: false,
-          render: p => Array.isArray(p) ? p.join('; ') : (p || '')
-        },
-        {
-          data: 'Licenses', title: 'Licenses', visible: true,
-          render: l => Array.isArray(l) ? l.map(x => x.LicenseName || '').filter(name => name).join(', ') : ''
-        }
+        { data: 'BusinessPhones', title: 'Phones', visible: false, render: p => Array.isArray(p) ? p.join('; ') : (p || '') },
+        { data: 'Licenses', title: 'Licenses', visible: true, render: l => Array.isArray(l) ? l.map(x => x.LicenseName || '').filter(name => name).join(', ') : '' }
       ],
       initComplete: function() {
         const api = this.api();
@@ -201,31 +167,23 @@ $(document).ready(function() {
           const input = $(api.table().header()).find('tr:eq(1) th:eq(' + colIdx + ') input');
           if (input.length > 0) {
             input.off('keyup change clear').on('keyup change clear', function() {
-              if (column.search() !== this.value) {
-                column.search(this.value).draw();
-              }
+              if (column.search() !== this.value) { column.search(this.value).draw(); }
             });
           }
         });
         $('#colContainer .col-vis').each(function() {
           const idx = +$(this).data('col');
           try {
-            if (idx >= 0 && idx < api.columns().nodes().length) {
-              $(this).prop('checked', api.column(idx).visible());
-            } else {
-              $(this).prop('disabled', true);
-            }
+            if (idx >= 0 && idx < api.columns().nodes().length) { $(this).prop('checked', api.column(idx).visible()); }
+            else { $(this).prop('disabled', true); }
           } catch (e) { console.warn("Error checking column visibility:", idx, e); }
         });
         $('.col-vis').off('change').on('change', function() {
           const idx = +$(this).data('col');
           try {
             const col = api.column(idx);
-            if (col && col.visible) {
-              col.visible(!col.visible());
-            } else {
-              console.warn("Column object not found or visible method missing for index:", idx);
-            }
+            if (col && col.visible) { col.visible(!col.visible()); }
+            else { console.warn("Column object not found for index:", idx); }
           } catch (e) { console.warn("Error toggling column visibility:", idx, e); }
         });
         $('#multiSearchFields .multi-search-row').each(function() { updateSearchFieldUI($(this)); });
@@ -238,12 +196,10 @@ $(document).ready(function() {
       },
       drawCallback: renderAlerts
     });
-
-    $(table.table().node()).on('preDraw.dt', function() { showLoader(); });
-    $(table.table().node()).on('draw.dt', function() { hideLoader(); });
+    $(table.table().node()).on('preDraw.dt', showLoader).on('draw.dt', hideLoader);
   }
 
-  // Toggle visibility of text input vs. select dropdown in multi-search rows
+  // MODIFIED function to integrate Select2
   function updateSearchFieldUI($row) {
     const selectedColIndex = $row.find('.column-select').val();
     const columnConfig = searchableColumnsConfig.find(c => c.index == selectedColIndex);
@@ -251,151 +207,169 @@ $(document).ready(function() {
     const $textInput = $row.find('.search-input');
     const $dropdownInput = $row.find('.search-value-select');
 
+    // If Select2 was previously initialized, destroy it to prevent conflicts
+    if ($dropdownInput.hasClass("select2-hidden-accessible")) {
+      $dropdownInput.select2('destroy');
+    }
+    // Ensure the original select is visible before Select2 potentially hides it again
+    // This also helps reset its state if switching from text input.
+    $dropdownInput.show();
+
+
     if (columnConfig && columnConfig.useDropdown) {
       $textInput.hide();
-      $dropdownInput.show().empty(); // Clear previous options
-      $dropdownInput.append($('<option>').val('').text(`Select a ${columnConfig.title}...`));
+      $dropdownInput.show().empty(); // Show and clear previous options
+
+      // Add a default empty option which Select2 can use for its placeholder
+      $dropdownInput.append($('<option>').val('').text('')); // Placeholder managed by Select2
 
       const values = uniqueFieldValues[columnConfig.dataProp] || [];
       values.forEach(val => {
         $dropdownInput.append($('<option>').val(escapeHtml(val)).text(escapeHtml(val)));
       });
+
+      // Initialize Select2
+      $dropdownInput.select2({
+        placeholder: `Digite ou selecione um(a) ${columnConfig.title.toLowerCase()}`,
+        allowClear: true,
+        width: 'style', // Adjusts width to the style of the original element
+                      // or use '100%' if parent container controls width
+        minimumInputLength: 0 // Show dropdown on focus, can be set to 1 to require typing
+      });
+      // Ensure the Select2 container is visible (it might be hidden if the original select was display:none)
+      $dropdownInput.next(".select2-container").show();
+
     } else {
       $textInput.show();
-      $dropdownInput.hide().empty();
-      $textInput.attr('placeholder', 'Term...');
+      $dropdownInput.hide().empty(); // Hide and empty if not used
+      // Also explicitly hide any Select2 container that might have been associated
+      $dropdownInput.next(".select2-container").hide();
+      $textInput.attr('placeholder', 'Termo...');
     }
   }
 
-  // Set up multi-search functionality UI and listeners
   function setupMultiSearch() {
     const $container = $('#multiSearchFields');
-
     function addSearchField() {
       const columnOptions = searchableColumnsConfig
         .map(c => `<option value="${c.index}">${escapeHtml(c.title)}</option>`)
         .join('');
-
       const $row = $(`<div class="multi-search-row">
         <select class="column-select">${columnOptions}</select>
-        <input class="search-input" placeholder="Term..." />
-        <select class="search-value-select" style="display: none;"></select> 
-        <button class="remove-field" title="Remove filter"><i class="fas fa-trash-alt"></i></button>
+        <input class="search-input" placeholder="Termo..." />
+        <select class="search-value-select" style="display: none;"></select>
+        <button class="remove-field" title="Remover filtro"><i class="fas fa-trash-alt"></i></button>
       </div>`);
-
       $container.append($row);
-      updateSearchFieldUI($row); // Set initial input state
-
+      updateSearchFieldUI($row);
       $row.find('.column-select').on('change', function() {
         updateSearchFieldUI($row);
         $row.find('.search-input').val('');
-        $row.find('.search-value-select').val('');
+        $row.find('.search-value-select').val('').trigger('change'); // Clear Select2 value properly
         applyMultiSearch();
       });
-
-      $row.find('.search-input, .search-value-select').on('input change', applyMultiSearch);
+      // For text input, 'input' event is good for immediate feedback.
+      // For Select2, 'change' event is standard when a selection is made.
+      $row.find('.search-input').on('input change', applyMultiSearch);
+      $row.find('.search-value-select').on('change', applyMultiSearch);
 
       $row.find('.remove-field').on('click', function() {
-        $(this).closest('.multi-search-row').remove();
+        // If Select2 is active on the select being removed, destroy it first
+        const $selectToRemove = $(this).closest('.multi-search-row').find('.search-value-select');
+        if ($selectToRemove.hasClass("select2-hidden-accessible")) {
+            $selectToRemove.select2('destroy');
+        }
+        $(this).closest('.multi-search-row').remove();
         applyMultiSearch();
       });
     }
-
     $('#addSearchField').off('click').on('click', addSearchField);
     $('#multiSearchOperator').off('change').on('change', applyMultiSearch);
-
     if ($container.children().length === 0) { addSearchField(); }
-    _executeMultiSearchLogic(); // Apply initial state
+    _executeMultiSearchLogic();
   }
 
-  // The core logic for applying multi-search filters to DataTables
   function _executeMultiSearchLogic() {
     const operator = $('#multiSearchOperator').val();
     const $searchCriteriaText = $('#searchCriteria');
-
     if (!table) {
       $searchCriteriaText.text(allData.length === 0 ? 'No data loaded.' : 'Table not available/initialized.');
       return;
     }
-
-    table.search('').columns().search(''); // Clear existing searches
+    table.search('').columns().search('');
     while ($.fn.dataTable.ext.search.length > 0) { $.fn.dataTable.ext.search.pop(); }
-
     const filters = [];
     $('#multiSearchFields .multi-search-row').each(function() {
       const colIndex = $(this).find('.column-select').val();
       const columnConfig = searchableColumnsConfig.find(c => c.index == colIndex);
       let searchTerm = '';
-
       if (columnConfig) {
         searchTerm = columnConfig.useDropdown ?
-                     $(this).find('.search-value-select').val() :
-                     $(this).find('.search-input').val().trim();
-
+          $(this).find('.search-value-select').val() :
+          $(this).find('.search-input').val().trim();
         if (searchTerm) {
           filters.push({
-            col: parseInt(colIndex, 10),
-            term: searchTerm,
-            dataProp: columnConfig.dataProp,
-            isDropdown: columnConfig.useDropdown
+            col: parseInt(colIndex, 10), term: searchTerm,
+            dataProp: columnConfig.dataProp, isDropdown: columnConfig.useDropdown
           });
         }
       }
     });
-
-    let criteriaText = operator === 'AND' ? 'Criteria: All filters must match (AND)' : 'Criteria: Any filter must match (OR)';
+    let criteriaText = operator === 'AND' ? 'Critérios: Todos os filtros devem corresponder (E)' : 'Critérios: Qualquer filtro deve corresponder (OU)';
     if (filters.length > 0) {
-      criteriaText += ` (${filters.length} active filter(s))`;
+      criteriaText += ` (${filters.length} filtro(s) ativo(s))`;
       $.fn.dataTable.ext.search.push(
         function(settings, apiData, dataIndex) {
           if (settings.nTable.id !== table.table().node().id) return true;
           const rowData = table.row(dataIndex).data();
           if (!rowData) return false;
-
           const logicFn = operator === 'OR' ? filters.some.bind(filters) : filters.every.bind(filters);
-
           return logicFn(filter => {
-            if (filter.dataProp === 'Licenses') { // Special handling for Licenses
+            if (filter.dataProp === 'Licenses') {
               return (rowData.Licenses && Array.isArray(rowData.Licenses)) ?
                 rowData.Licenses.some(l => (l.LicenseName || '').toLowerCase() === filter.term.toLowerCase()) : false;
-            } else if (filter.isDropdown) { // Exact match for other dropdowns
+            } else if (filter.isDropdown) {
               const cellValue = rowData[filter.dataProp] || '';
               return cellValue.toString().toLowerCase() === filter.term.toLowerCase();
-            } else { // Standard text search (contains) for non-dropdown fields
-              const cellValue = apiData[filter.col] || ''; // Use DataTables prepared string data
+            } else {
+              const cellValue = apiData[filter.col] || '';
               return cellValue.toString().toLowerCase().includes(filter.term.toLowerCase());
             }
           });
         }
       );
     } else {
-      criteriaText = 'Criteria: All results (no filters active)';
+      criteriaText = 'Critérios: Todos os resultados (sem filtros ativos)';
     }
     $searchCriteriaText.text(criteriaText);
     table.draw();
   }
 
-  // Debounce wrapper for executing multi-search logic
   function applyMultiSearch() {
     clearTimeout(multiSearchDebounceTimer);
     multiSearchDebounceTimer = setTimeout(_executeMultiSearchLogic, DEBOUNCE_DELAY);
   }
 
-  // Clear all filters
   $('#clearFilters').on('click', () => {
     if (table) {
       $(table.table().header()).find('tr:eq(1) th input').val('');
       table.search('').columns().search('');
     }
+    // Properly clear Select2 instances in multi-search rows before removing them
+    $('#multiSearchFields .multi-search-row').each(function() {
+        const $selectToClear = $(this).find('.search-value-select');
+        if ($selectToClear.hasClass("select2-hidden-accessible")) {
+            $selectToClear.select2('destroy');
+        }
+    });
     $('#multiSearchFields').empty();
-    if (allData.length > 0) { setupMultiSearch(); } // Re-adds one default field
-    else { $('#searchCriteria').text('No data loaded.'); }
 
+    if (allData.length > 0) { setupMultiSearch(); }
+    else { $('#searchCriteria').text('Nenhum dado carregado.'); }
     while ($.fn.dataTable.ext.search.length > 0) { $.fn.dataTable.ext.search.pop(); }
     if(table) table.draw();
     $('#alertPanel').empty();
-
-    const defaultVisibleCols = [1, 2, 3, 6]; // Name, Email, Job Title, Licenses
+    const defaultVisibleCols = [1, 2, 3, 6];
     $('#colContainer .col-vis').each(function() {
       const idx = +$(this).data('col');
       const isDefaultVisible = defaultVisibleCols.includes(idx);
@@ -406,7 +380,6 @@ $(document).ready(function() {
     });
   });
 
-  // Function to download a CSV file
   function downloadCsv(csvContent, fileName) {
     const bom = "\uFEFF";
     const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -421,23 +394,20 @@ $(document).ready(function() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } else {
-      alert("Your browser does not support downloading files directly.");
+      alert("Seu navegador não suporta o download direto de arquivos.");
     }
   }
 
-  // Handle CSV export button click
   $('#exportCsv').on('click', () => {
-    if (!table) return alert('Table not initialized. No data loaded.');
+    if (!table) return alert('Tabela não inicializada. Nenhum dado carregado.');
     const rowsToExport = table.rows({ search: 'applied' }).data().toArray();
-    if (!rowsToExport.length) return alert('No records to export with current filters.');
-
+    if (!rowsToExport.length) return alert('Nenhum registro para exportar com os filtros atuais.');
     const visibleColumns = [];
     table.columns(':visible').every(function() {
       const columnTitle = $(table.table().header()).find('tr:eq(0) th').eq(this.index()).text();
       const dataProp = table.settings()[0].aoColumns[this.index()].mData;
       visibleColumns.push({ title: columnTitle, dataProp: dataProp });
     });
-
     const headerRow = visibleColumns.map(col => escapeCsvValue(col.title)).join(',');
     const csvRows = rowsToExport.map(rowData => {
       return visibleColumns.map(col => {
@@ -448,7 +418,7 @@ $(document).ready(function() {
           if (String(cellData).match(/[,"\n\r;]/)) shouldForceQuotes = true;
         } else if (col.dataProp === 'Licenses') {
           const licensesArray = (rowData.Licenses && Array.isArray(rowData.Licenses)) ?
-                                rowData.Licenses.map(l => l.LicenseName || '').filter(name => name) : [];
+            rowData.Licenses.map(l => l.LicenseName || '').filter(name => name) : [];
           cellData = licensesArray.length > 0 ? licensesArray.join('; ') : '';
           if (String(cellData).match(/[,"\n\r;]/)) shouldForceQuotes = true;
         } else {
@@ -461,19 +431,18 @@ $(document).ready(function() {
     downloadCsv(csvContent, 'license_report.csv');
   });
 
-  // Handle Issues Report export button click
   $('#exportIssues').on('click', () => {
-    if (!allData.length) return alert('No data loaded to generate issues report.');
+    if (!allData.length) return alert('Nenhum dado carregado para gerar o relatório de problemas.');
     const lines = [];
     if (nameConflicts.size) {
-      lines.push(['NAME+LOCATION CONFLICTS']);
-      lines.push(['Name', 'Location'].map(h => escapeCsvValue(h)));
+      lines.push(['CONFLITOS DE NOME+LOCALIZAÇÃO']);
+      lines.push(['Nome', 'Localização'].map(h => escapeCsvValue(h)));
       nameConflicts.forEach(key => lines.push(key.split('|||').map(value => escapeCsvValue(value))));
       lines.push([]);
     }
     if (dupLicUsers.size) {
-      lines.push(['USERS with Duplicate Licenses']);
-      lines.push(['Name', 'Location', 'Duplicate Licenses', 'Has Paid License?'].map(h => escapeCsvValue(h)));
+      lines.push(['USUÁRIOS com Licenças Duplicadas']);
+      lines.push(['Nome', 'Localização', 'Licenças Duplicadas', 'Possui Licença Paga?'].map(h => escapeCsvValue(h)));
       allData.filter(user => dupLicUsers.has(user.Id)).forEach(user => {
         const licCount = {}, duplicateLicNames = [];
         (user.Licenses || []).forEach(l => licCount[l.LicenseName] = (licCount[l.LicenseName] || 0) + 1);
@@ -481,37 +450,33 @@ $(document).ready(function() {
         const joinedDups = duplicateLicNames.join('; ');
         const hasPaid = (user.Licenses || []).some(l => !(l.LicenseName || '').toLowerCase().includes('free'));
         lines.push([
-          escapeCsvValue(user.DisplayName),
-          escapeCsvValue(user.OfficeLocation),
+          escapeCsvValue(user.DisplayName), escapeCsvValue(user.OfficeLocation),
           escapeCsvValue(joinedDups, joinedDups.includes(';') || joinedDups.match(/[,"\n\r]/)),
           escapeCsvValue(hasPaid ? 'Yes' : 'No')
         ]);
       });
     }
-    if (!lines.length) {
-        lines.push(['No issues detected.']);
-    }
+    if (!lines.length) { lines.push(['Nenhum problema detectado.']); }
     const csvContent = lines.map(rowArray => rowArray.join(',')).join('\n');
     downloadCsv(csvContent, 'issues_report.csv');
   });
 
-  // --- Initial Data Loading and Setup ---
   try {
     if (typeof userData === 'undefined') {
-      throw new Error("The 'userData' variable is not defined. JSON data was not correctly embedded in the HTML.");
+      throw new Error("A variável 'userData' não está definida. Os dados JSON não foram corretamente incorporados no HTML.");
     }
     const validatedData = validateJson(userData);
     if (validatedData.length > 0) {
       initTable(validatedData);
-      setupMultiSearch(); // Must be called after initTable populates uniqueFieldValues
-      $('#searchCriteria').text(`Data loaded. (${validatedData.length} users) Use filters to refine.`);
+      setupMultiSearch();
+      $('#searchCriteria').text(`Dados carregados. (${validatedData.length} usuários) Use filtros para refinar.`);
     } else {
-      alert('No valid users found in the data.');
-      $('#searchCriteria').text('No valid data loaded.');
+      alert('Nenhum usuário válido encontrado nos dados.');
+      $('#searchCriteria').text('Nenhum dado válido carregado.');
     }
   } catch (error) {
-    alert('Error processing data: ' + error.message);
-    console.error("Error processing data:", error);
-    $('#searchCriteria').text('Error loading data.');
+    alert('Erro ao processar dados: ' + error.message);
+    console.error("Erro ao processar dados:", error);
+    $('#searchCriteria').text('Erro ao carregar dados.');
   }
 });
