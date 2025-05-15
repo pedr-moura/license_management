@@ -217,7 +217,7 @@ $simpleHtmlContent = @"
                         <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="1" checked /><span class="checkbox-text">Name</span></label>
                         <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="2" checked /><span class="checkbox-text">Email</span></label>
                         <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="3" checked /><span class="checkbox-text">Job Title</span></label>
-                        <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="4" /><span class="checkbox-text">Department</span></label> 
+                        <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="4" /><span class="checkbox-text">Location</span></label> 
                         <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="5" /><span class="checkbox-text">Phones</span></label>
                         <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="6" checked /><span class="checkbox-text">Licenses</span></label>
                     </div>
