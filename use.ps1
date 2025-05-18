@@ -1,9 +1,25 @@
 try {
-    Connect-MgGraph -Scopes User.Read.All -NoWelcome
+    # Tenta conectar-se com as permissões necessárias. A autenticação interativa ocorrerá aqui se não houver uma sessão existente.
+    Connect-MgGraph -Scopes "User.Read.All,Directory.Read.All" -NoWelcome
     Write-Host "Successfully connected to Microsoft Graph." -ForegroundColor Green
+
+    # Obter o token de acesso da sessão atual
+    # É importante garantir que o contexto e o token sejam válidos.
+    $context = Get-MgContext
+    if (-not $context) {
+        Write-Error "Failed to get context after connecting to Microsoft Graph. Please ensure you are properly authenticated."
+        exit 1
+    }
+    $accessToken = $context.TokenCredential.GetToken($context.Scopes).Token
+    if (-not $accessToken) {
+        Write-Error "Failed to retrieve access token after connecting to Microsoft Graph."
+        exit 1
+    }
+    Write-Host "Access token retrieved successfully for passing to threads." -ForegroundColor DarkYellow
+
 }
 catch {
-    Write-Error "Failed to connect to Microsoft Graph: $($_.Exception.Message)"
+    Write-Error "Failed to connect to Microsoft Graph or retrieve access token: $($_.Exception.Message)"
     exit 1
 }
 
@@ -65,11 +81,22 @@ foreach ($skuId in $skuIdMap.Keys) {
         $jobs = Get-Job # Refresh job list
     }
 
+    # Pass $accessToken to the thread job
     $jobs += Start-ThreadJob -Name "GetUsers_$($skuName -replace '\W','_')" -ScriptBlock {
-        param($skuIdParam, $skuNameParam)
+        param($skuIdParam, $skuNameParam, $passedAccessToken) # Added $passedAccessToken
+
+        try {
+            # Authenticate within the thread using the passed access token
+            Connect-MgGraph -AccessToken $passedAccessToken -NoWelcome
+            # Write-Host "Thread job $($MyInvocation.MyCommand.Name) connected to Graph." -ForegroundColor Green # Optional: for thread-specific logging
+        }
+        catch {
+            Write-Error "Error connecting to Graph in job GetUsers_$($skuNameParam -replace '\W','_') for SKU '$skuIdParam': $($_.Exception.ToString())"
+            return $null
+        }
 
         $mgUserParams = @{
-            Filter           = "assignedLicenses/any(u:u/skuId eq $($skuIdParam))"
+            Filter           = "assignedLicenses/any(u:u/skuId eq '$($skuIdParam)')" # Encapsulate $skuIdParam in quotes
             ConsistencyLevel = 'eventual' # Necessary for advanced queries on Azure AD
             All              = $true       # Retrieve all users matching the filter
             Select           = 'id,userPrincipalName,displayName,jobTitle,officeLocation,businessPhones'
@@ -93,10 +120,15 @@ foreach ($skuId in $skuIdMap.Keys) {
             return $outputObjects
         }
         catch {
-            Write-Error "Error in job GetUsers_$($skuNameParam -replace '\W','_') for SKU '$skuIdParam': $($_.Exception.ToString())"
+            # Detailed error logging within the job
+            $errorMessage = "Error in job GetUsers_$($skuNameParam -replace '\W','_') for SKU '$skuIdParam' during Get-MgUser: $($_.Exception.ToString())"
+            if ($_.Exception.InnerException) {
+                $errorMessage += " Inner Exception: $($_.Exception.InnerException.ToString())"
+            }
+            Write-Error $errorMessage
             return $null # Return null on error for this job
         }
-    } -ArgumentList $skuId, $skuName
+    } -ArgumentList $skuId, $skuName, $accessToken # Pass the token here
 
     Write-Host "Task started for license '$skuName'" -ForegroundColor DarkCyan
 }
@@ -114,8 +146,9 @@ foreach ($job in $jobs) {
     }
     else {
         Write-Warning "Job $($job.Name) (ID: $($job.Id)) did not complete. State: $($job.State)."
-        if ($job.Error.Count -gt 0) {
-            $job.Error | ForEach-Object { Write-Warning "  Error in Job: $($_.Exception.ToString())" }
+        # Display detailed errors from the job's error stream
+        if ($job.ChildJobs[0].Error) { # Errors are on the child job for Start-ThreadJob
+             $job.ChildJobs[0].Error | ForEach-Object { Write-Warning "  Error in Job $($job.Name): $($_.ToString())" }
         }
     }
 }
@@ -145,7 +178,7 @@ if ($allEntries.Count -gt 0) {
     }
 }
 else {
-    Write-Warning "No entries were collected from jobs. Check job error logs."
+    Write-Warning "No entries were collected from jobs. This might be due to errors in all jobs or no users having the queried licenses. Check job error logs above."
 }
 
 $results = $userIndex.Values # Get the collection of user objects
@@ -166,7 +199,7 @@ if ($results.Count -gt 0) {
 }
 else {
     Write-Warning "No results to convert to JSON. JSON will indicate 'no data'."
-    $json = '{ "message": "No user data found or processed.", "data": [] }'
+    $json = '{ "message": "No user data found or processed. This could be due to errors in data collection jobs or no users having the queried licenses.", "data": [] }'
 }
 
 # HTML content with translated strings
@@ -193,7 +226,7 @@ $simpleHtmlContent = @"
 </div>
 
     <script>
-        // PowerShell will replace json with actual user data
+        // PowerShell will replace $json with actual user data
         const userData = $json;
     </script>
     <aside>
@@ -299,24 +332,18 @@ $simpleHtmlContent = @"
 "@
 
 # Define output directory and file
-$OutputDirectory = "C:\LicManagement" # Standard practice to use variable for path
-$OutputFileName = "license_management_report.html" # English file name
+$OutputDirectory = "C:\LicManagement"
+$OutputFileName = "license_management_report.html"
 $ReportHtmlPath = Join-Path -Path $OutputDirectory -ChildPath $OutputFileName
 
 # Create directory if it doesn't exist
 if (-not (Test-Path -Path $OutputDirectory -PathType Container)) {
-    # Write-Host "Directory '$OutputDirectory' not found. Attempting to create..." -ForegroundColor Yellow # Optional
     try {
         New-Item -Path $OutputDirectory -ItemType Directory -Force -ErrorAction Stop | Out-Null
-        # Write-Host "Directory '$OutputDirectory' created successfully." -ForegroundColor Green # Optional
     }
     catch {
         Write-Error "Failed to create directory '$OutputDirectory': $($_.Exception.Message)"
-        # Optionally exit or handle error if directory creation is critical
     }
-}
-else {
-    # Write-Host "Directory '$OutputDirectory' already exists." -ForegroundColor DarkGray # Optional
 }
 
 # Save the HTML file
