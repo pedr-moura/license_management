@@ -166,7 +166,7 @@ $(document).ready(function() {
         const $customDropdownContainer = $row.find('.custom-dropdown-container');
         const $customDropdownTextInput = $row.find('.custom-dropdown-text-input');
         const $customOptionsList = $row.find('.custom-options-list');
-        const $hiddenValueInput = $row.find('.search-value-input'); // CHANGED: from .search-value-select
+        const $hiddenValueInput = $row.find('.search-value-input');
 
         $customDropdownTextInput.off();
         $customOptionsList.off();
@@ -177,9 +177,7 @@ $(document).ready(function() {
             $customDropdownTextInput.val('');
             $customDropdownTextInput.attr('placeholder', `Type or select ${columnConfig.title.toLowerCase()}`);
             $customOptionsList.hide().empty();
-
-            // $hiddenValueInput.empty().append(...) is not needed for input type="hidden"
-            $hiddenValueInput.val(''); // Clear the hidden input
+            $hiddenValueInput.val('');
             const allUniqueOptions = uniqueFieldValues[columnConfig.dataProp] || [];
 
             let filterDebounce;
@@ -216,10 +214,8 @@ $(document).ready(function() {
 
                 const selectedText = $(this).text();
                 const selectedValue = $(this).data('value');
-                console.log('DEBUG: Custom dropdown item clicked. Text:', selectedText, 'Value from data-value:', selectedValue, 'Type of selectedValue:', typeof selectedValue);
-
                 $customDropdownTextInput.val(selectedText);
-                $hiddenValueInput.val(selectedValue).trigger('change'); // CHANGED: $hiddenValueInput
+                $hiddenValueInput.val(selectedValue).trigger('change');
                 $customOptionsList.hide();
             });
 
@@ -232,7 +228,7 @@ $(document).ready(function() {
         } else {
             $searchInput.show().val('');
             $customDropdownContainer.hide();
-            $hiddenValueInput.val('').hide(); // CHANGED: $hiddenValueInput, ensure it's hidden if input text field is shown
+            $hiddenValueInput.val('').hide();
             $searchInput.attr('placeholder', 'Term...');
         }
     }
@@ -251,7 +247,7 @@ $(document).ready(function() {
                         <input type="text" class="custom-dropdown-text-input" autocomplete="off" />
                         <div class="custom-options-list"></div>
                     </div>
-                    <input type="hidden" class="search-value-input" /> 
+                    <input type="hidden" class="search-value-input" />
                     <button class="remove-field" title="Remove filter"><i class="fas fa-trash-alt"></i></button>
                 </div>
             `);
@@ -263,15 +259,14 @@ $(document).ready(function() {
                 const selectedColIndex = $row.find('.column-select').val();
                 const columnConfig = searchableColumnsConfig.find(c => c.index == selectedColIndex);
                 if (columnConfig && columnConfig.useDropdown) {
-                    $row.find('.search-value-input').val('').trigger('change'); // CHANGED
+                    $row.find('.search-value-input').val('').trigger('change');
                 } else {
                     $row.find('.search-input').val('').trigger('input');
                 }
             });
 
             $row.find('.search-input').on('input change', applyMultiSearch);
-            $row.find('.search-value-input').on('change', function() { // CHANGED
-                console.log('DEBUG: Hidden input .search-value-input changed. Value:', $(this).val(), 'Applying multi-search...');
+            $row.find('.search-value-input').on('change', function() {
                 applyMultiSearch();
             });
 
@@ -297,14 +292,12 @@ $(document).ready(function() {
     }
 
     function applyMultiSearch() {
-        console.log('DEBUG: applyMultiSearch called');
         clearTimeout(multiSearchDebounceTimer);
         showLoader('Applying filters...');
         multiSearchDebounceTimer = setTimeout(_executeMultiSearchLogic, DEBOUNCE_DELAY);
     }
 
     function _executeMultiSearchLogic() {
-        console.log('DEBUG: _executeMultiSearchLogic called');
         const operator = $('#multiSearchOperator').val();
         const $searchCriteriaText = $('#searchCriteria');
         if (!table) {
@@ -323,9 +316,8 @@ $(document).ready(function() {
             let searchTerm = '';
             if (columnConfig) {
                 searchTerm = columnConfig.useDropdown ?
-                    $(this).find('.search-value-input').val() : // CHANGED
+                    $(this).find('.search-value-input').val() :
                     $(this).find('.search-input').val().trim();
-                console.log('DEBUG: Inspecting filter field: Column Title=', columnConfig.title, 'Is Dropdown=', columnConfig.useDropdown, 'Search Term from UI=', searchTerm);
                 if (searchTerm) {
                     filters.push({
                         col: parseInt(colIndex, 10), term: searchTerm,
@@ -334,7 +326,6 @@ $(document).ready(function() {
                 }
             }
         });
-        console.log('DEBUG: Active filters collected:', filters);
 
         let criteriaText = operator === 'AND' ? 'Criteria: All filters (AND)' : 'Criteria: Any filter (OR)';
         if (filters.length > 0) {
@@ -355,7 +346,7 @@ $(document).ready(function() {
                             cellValue = rowData[filter.dataProp] || '';
                             return String(cellValue).toLowerCase() === filter.term.toLowerCase();
                         } else {
-                            cellValue = apiData[filter.col] || '';
+                            cellValue = apiData[filter.col] || ''; // apiData is the array of string values for the row
                             return String(cellValue).toLowerCase().includes(filter.term.toLowerCase());
                         }
                     });
@@ -635,39 +626,30 @@ $(document).ready(function() {
     }
 
     try {
-        if (typeof userData !== 'undefined' && Array.isArray(userData)) {
-            processDataWithWorker(userData);
-        } else {
-            $('#jsonFileInput').on('change', function(event) {
-                const file = event.target.files[0];
-                if (file) {
-                    showLoader('Reading JSON file...');
-                    const reader = new FileReader();
-                    reader.onload = function(e_reader) {
-                        try {
-                            const jsonData = JSON.parse(e_reader.target.result);
-                            processDataWithWorker(jsonData);
-                        } catch (err) {
-                            hideLoader();
-                            alert('Error parsing JSON file: ' + err.message);
-                            console.error("JSON Parse Error:", err);
-                            $('#searchCriteria').text('Failed to read JSON.');
-                        }
-                    };
-                    reader.onerror = function() {
-                        hideLoader();
-                        alert('Error reading file.');
-                         $('#searchCriteria').text('Failed to read file.');
-                    };
-                    reader.readAsText(file);
-                }
-            });
-            if ($('#jsonFileInput').length === 0) {
-                 console.warn("Global variable 'userData' not defined and input #jsonFileInput not found. Please add a file input or define 'userData'.");
-                 $('#searchCriteria').html('Please load a user JSON file. <br/> (Global <code>userData</code> variable not found.)');
-            } else {
-                 $('#searchCriteria').text('Please load a user JSON file.');
+        // userData é injetado pelo PowerShell
+        if (typeof userData !== 'undefined' && ( (Array.isArray(userData) && userData.length > 0) || (userData.data && Array.isArray(userData.data) && userData.data.length > 0) ) ) {
+            let dataToProcess = Array.isArray(userData) ? userData : userData.data;
+            if (userData.error || (Array.isArray(dataToProcess) && dataToProcess.length === 0 && !userData.message) ) {
+                 $('#searchCriteria').text(userData.error || 'JSON data is empty or invalid.');
+                 console.error("Error in userData or empty data:", userData);
+                 hideLoader();
+            } else if (userData.message && Array.isArray(dataToProcess) && dataToProcess.length === 0) {
+                 $('#searchCriteria').text(userData.message); // Exibe "No user data found or processed."
+                 hideLoader();
             }
+            else {
+                processDataWithWorker(dataToProcess);
+            }
+        } else if (typeof userData !== 'undefined' && userData.message) { // Para o caso de { "message": "No user data...", "data": [] }
+             $('#searchCriteria').text(userData.message);
+             hideLoader();
+        }
+        else {
+            // Este bloco é para um cenário onde 'userData' não é injetado e um input de arquivo seria usado.
+            // No seu caso, 'userData' é sempre injetado.
+            // Se 'userData' não for definido ou for um JSON de erro sem a propriedade 'data' ou 'message' específica.
+            console.warn("Global variable 'userData' is not defined as expected or indicates an error state from PowerShell.");
+            $('#searchCriteria').html('Failed to load data from PowerShell. Check PowerShell script output. <br/> (Global <code>userData</code> variable has unexpected format or error).');
             hideLoader();
         }
     } catch (error) {
@@ -676,4 +658,237 @@ $(document).ready(function() {
         console.error("Initial loading error:", error);
         $('#searchCriteria').text('Error loading data.');
     }
-});
+
+    // ===========================================================
+    // NOVA FUNCIONALIDADE DE IA - INÍCIO
+    // ===========================================================
+    const AI_API_KEY_STORAGE_KEY = 'licenseAiApiKey_v1'; // Chave para localStorage (use _v1 se mudar a estrutura)
+
+    const $manageAiApiKeyButton = $('#manageAiApiKeyButton');
+    const $aiApiKeyModal = $('#aiApiKeyModal');
+    const $closeAiModalButton = $('#closeAiModalButton');
+    const $aiApiKeyInput = $('#aiApiKeyInput');
+    const $saveAiApiKeyButton = $('#saveAiApiKeyButton');
+    const $aiApiKeyMessage = $('#aiApiKeyMessage');
+
+    const $askAiButton = $('#askAiButton');
+    const $aiQuestionInput = $('#aiQuestionInput');
+    const $aiResponseArea = $('#aiResponseArea');
+    const $aiLoadingIndicator = $('#aiLoadingIndicator');
+
+    // --- Gerenciamento da Chave API da IA ---
+    function getAiApiKey() {
+        return localStorage.getItem(AI_API_KEY_STORAGE_KEY);
+    }
+
+    function updateAiApiKeyStatusDisplay() {
+        if (getAiApiKey()) {
+            $manageAiApiKeyButton.text('API IA Config.'); // Mais curto
+            $manageAiApiKeyButton.css('background-color', '#28a745'); // Verde
+            $manageAiApiKeyButton.attr('title', 'Chave da API da IA configurada');
+        } else {
+            $manageAiApiKeyButton.text('Configurar API IA');
+            $manageAiApiKeyButton.css('background-color', ''); // Volta ao original do botão
+            $manageAiApiKeyButton.attr('title', 'Configurar chave da API da IA');
+        }
+    }
+   
+    $manageAiApiKeyButton.on('click', function() {
+        $aiApiKeyInput.val(getAiApiKey() || '');
+        $aiApiKeyModal.css('display', 'flex'); // Para mostrar e centralizar
+    });
+
+    $closeAiModalButton.on('click', function() {
+        $aiApiKeyModal.hide();
+    });
+
+    $(window).on('click', function(event) {
+        if (event.target == $aiApiKeyModal[0]) { // Verifica se o clique foi no próprio modal (fundo)
+            $aiApiKeyModal.hide();
+        }
+    });
+
+    $saveAiApiKeyButton.on('click', function() {
+        const key = $aiApiKeyInput.val().trim();
+        if (key) {
+            localStorage.setItem(AI_API_KEY_STORAGE_KEY, key);
+            $aiApiKeyMessage.text('Chave da API da IA salva!').removeClass('error').addClass('success');
+            updateAiApiKeyStatusDisplay();
+            setTimeout(() => {
+                $aiApiKeyMessage.text('').removeClass('success');
+                $aiApiKeyModal.hide();
+            }, 1500);
+        } else {
+            $aiApiKeyMessage.text('Por favor, insira uma chave válida.').removeClass('success').addClass('error');
+        }
+    });
+
+    // --- Interação com a IA ---
+    $askAiButton.on('click', async function() {
+        const apiKey = getAiApiKey();
+        if (!apiKey) {
+            alert('Por favor, configure sua chave de API da IA primeiro.');
+            $aiApiKeyModal.css('display', 'flex');
+            return;
+        }
+
+        const userQuestion = $aiQuestionInput.val().trim();
+        let promptContext = "";
+        let systemMessage = `Você é um assistente especialista em análise de licenciamento Microsoft 365. Analise os dados fornecidos e responda à pergunta do usuário ou forneça insights gerais se nenhuma pergunta específica for feita. Seja conciso e foque em observações acionáveis. Os dados de licença de usuários são fornecidos em formato JSON. Quando fornecer uma resposta, use formatação Markdown simples (negrito, itálico, listas).`;
+
+        if (allData && allData.length > 0) {
+            const totalUsers = allData.length;
+            const licenseCounts = {};
+            allData.forEach(user => {
+                (user.Licenses || []).forEach(lic => {
+                    licenseCounts[lic.LicenseName] = (licenseCounts[lic.LicenseName] || 0) + 1;
+                });
+            });
+            const topLicenses = Object.entries(licenseCounts)
+                .sort(([,a],[,b]) => b-a)
+                .slice(0, 5)
+                .map(([name, count]) => `${name}: ${count} atribuições`)
+                .join('\n  - ');
+           
+            promptContext = `Resumo dos dados de licença:\n- Total de Usuários: ${totalUsers}\n- Principais Licenças (Top 5 por atribuição):\n  - ${topLicenses}`;
+            
+            let sampleDataForPrompt = [];
+            if (allData.length <= 10) { // Se poucos dados, envia todos
+                sampleDataForPrompt = allData.map(u => ({DisplayName: u.DisplayName, Licenses: u.Licenses.map(l=>l.LicenseName)}));
+            } else { // Se muitos dados, envia uma amostra menor
+                sampleDataForPrompt = allData.slice(0, 5).map(u => ({DisplayName: u.DisplayName, Licenses: u.Licenses.map(l=>l.LicenseName)}));
+                promptContext += `\n\nNota: Os dados completos contêm ${allData.length} usuários. Uma pequena amostra de até 5 usuários é fornecida abaixo para detalhamento.`;
+            }
+            promptContext += `\n\nAmostra de Dados (Nome e Licenças):\n${JSON.stringify(sampleDataForPrompt, null, 2)}`;
+
+        } else {
+            $aiResponseArea.text('Não há dados de licença carregados para analisar.');
+            return;
+        }
+
+        let userQueryForAI = userQuestion || "Com base no resumo e na amostra de dados de licença fornecidos, quais são os principais insights, possíveis otimizações de custos ou anomalias que você pode identificar?";
+       
+        // << ====================================================================== >>
+        // << ATENÇÃO: VOCÊ PRECISA CONFIGURAR AS PRÓXIMAS LINHAS PARA SEU PROVEDOR DE IA >>
+        // << ====================================================================== >>
+        // 1. Defina o AI_PROVIDER_ENDPOINT com a URL correta da API da IA.
+        // 2. Adapte os HEADERS (especialmente a Autorização com sua API Key).
+        // 3. Adapte o BODY da requisição para o formato esperado pela sua IA (OpenAI, Gemini, Claude, etc.).
+        // 4. Adapte a EXTRAÇÃO DA RESPOSTA para pegar o texto da IA corretamente do JSON de resposta.
+        // ------------------------------------------------------------------------------
+
+        const AI_PROVIDER_ENDPOINT = 'URL_DA_SUA_API_DE_IA_ESPECIFICA_AQUI'; // <<== CONFIGURE ISTO!
+
+        if (AI_PROVIDER_ENDPOINT === 'URL_DA_SUA_API_DE_IA_ESPECIFICA_AQUI') {
+            $aiResponseArea.html('<strong>CONFIGURAÇÃO NECESSÁRIA:</strong><br>O endpoint da API da IA (<code>AI_PROVIDER_ENDPOINT</code>) e a lógica de chamada no arquivo <code>scripts.js</code> precisam ser definidos para o seu provedor de IA específico.');
+            return;
+        }
+
+        $aiLoadingIndicator.removeClass('hidden');
+        $askAiButton.prop('disabled', true);
+        $aiResponseArea.text('Analisando com IA...');
+
+        try {
+            const requestHeaders = {
+                'Content-Type': 'application/json',
+                // Exemplo para OpenAI (substitua 'apiKey' pela sua chave real):
+                // 'Authorization': `Bearer ${apiKey}`,
+
+                // Exemplo para Google AI Studio (Gemini API) - a chave normalmente vai na URL
+                // Se a API usar um header específico:
+                // 'x-api-key': apiKey,
+            };
+             // ADICIONE AQUI A LÓGICA PARA INCLUIR A CHAVE NO HEADER SE NECESSÁRIO
+             // Exemplo:
+             // if (AI_PROVIDER_ENDPOINT.toLowerCase().includes("openai")) {
+             //     requestHeaders['Authorization'] = `Bearer ${apiKey}`;
+             // } else if (AI_PROVIDER_ENDPOINT.toLowerCase().includes("gemini") && !AI_PROVIDER_ENDPOINT.includes("?key=")) {
+             //     // Algumas APIs do Google usam x-goog-api-key
+             //     // requestHeaders['x-goog-api-key'] = apiKey;
+             // }
+
+
+            let finalEndpoint = AI_PROVIDER_ENDPOINT;
+            // Exemplo para Google Gemini, onde a chave vai na URL:
+            // if (AI_PROVIDER_ENDPOINT.toLowerCase().includes("generativelanguage.googleapis.com")) { // Gemini
+            //     finalEndpoint = `${AI_PROVIDER_ENDPOINT}?key=${apiKey}`;
+            // }
+
+            // Adapte o corpo da requisição para o formato esperado pela sua IA
+            let requestBody = {};
+
+            // Exemplo para OpenAI (modelos GPT):
+            // requestBody = {
+            //     model: "gpt-3.5-turbo", // Ou "gpt-4", "gpt-4o" etc.
+            //     messages: [
+            //         { role: "system", content: systemMessage },
+            //         { role: "user", content: `${promptContext}\n\nPergunta do usuário: ${userQueryForAI}` }
+            //     ],
+            //     max_tokens: 700, // Ajuste conforme necessário
+            //     temperature: 0.5
+            // };
+
+            // Exemplo para Google Gemini (Content API):
+            // requestBody = {
+            //   contents: [{
+            //     role: "user", // Especificar role para histórico de chat se necessário
+            //     parts: [{ text: `${systemMessage}\n\nContexto dos Dados:\n${promptContext}\n\nPergunta do usuário: ${userQueryForAI}` }]
+            //   }],
+            //   generationConfig: { "maxOutputTokens": 700, "temperature": 0.5 } // Ajuste conforme necessário
+            // };
+
+            // Se você não definir `requestBody` acima com um exemplo, a IA pode não funcionar.
+            // Certifique-se de que este objeto está correto para sua API.
+            if (Object.keys(requestBody).length === 0) {
+                 throw new Error("O `requestBody` para a API da IA não foi configurado. Verifique os exemplos comentados no `scripts.js`.");
+            }
+
+            const response = await fetch(finalEndpoint, {
+                method: 'POST',
+                headers: requestHeaders,
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text(); // Tenta pegar texto para mais detalhes
+                let errorJson = null;
+                try { errorJson = JSON.parse(errorText); } catch (e) { /* não é JSON */ }
+                
+                let detailedMessage = errorJson ? (errorJson.error?.message || JSON.stringify(errorJson)) : errorText;
+                console.error("Erro da API da IA:", response.status, detailedMessage);
+                throw new Error(`Erro da API (${response.status}): ${detailedMessage}`);
+            }
+
+            const data = await response.json();
+            console.log("Resposta completa da API da IA:", data);
+
+            // Extraia a resposta da IA (ALTAMENTE DEPENDENTE DO PROVEDOR)
+            let aiTextResponse = "Não foi possível extrair uma resposta de texto da IA. Verifique o console para a resposta completa.";
+            
+            // Exemplo para OpenAI:
+            // if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+            //     aiTextResponse = data.choices[0].message.content.trim();
+            // }
+            // Exemplo para Google Gemini:
+            // if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text) {
+            //    aiTextResponse = data.candidates[0].content.parts.map(part => part.text).join(" ").trim(); // Concatena todas as partes
+            // }
+
+            // Para exibir Markdown de forma simples (substituindo newlines)
+            $aiResponseArea.html(aiTextResponse.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>'));
+
+        } catch (error) {
+            console.error('Erro ao chamar ou processar resposta da API da IA:', error);
+            $aiResponseArea.html(`<strong>Erro ao obter análise da IA:</strong><br>${escapeHtml(error.message)}`);
+        } finally {
+            $aiLoadingIndicator.addClass('hidden');
+            $askAiButton.prop('disabled', false);
+        }
+    });
+   
+    updateAiApiKeyStatusDisplay(); // Atualiza o status do botão ao carregar
+    // ===========================================================
+    // NOVA FUNCIONALIDADE DE IA - FIM
+    // ===========================================================
+
+}); // Fim do $(document).ready()
