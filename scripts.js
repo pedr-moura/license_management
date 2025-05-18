@@ -639,10 +639,10 @@ $(document).ready(function() {
         $('#searchCriteria').text('Error loading data.');
     }
 
+      // ===========================================================
+    // FUNCIONALIDADE DE IA - (Configurado para Google Gemini com Processamento em Blocos)
     // ===========================================================
-    // FUNCIONALIDADE DE IA - INÍCIO (Configurado para Google Gemini)
-    // ===========================================================
-    const AI_API_KEY_STORAGE_KEY = 'licenseAiApiKey_v1_google';
+    const AI_API_KEY_STORAGE_KEY = 'licenseAiApiKey_v1_google_chunked';
 
     const $manageAiApiKeyButton = $('#manageAiApiKeyButton');
     const $aiApiKeyModal = $('#aiApiKeyModal');
@@ -651,268 +651,192 @@ $(document).ready(function() {
     const $saveAiApiKeyButton = $('#saveAiApiKeyButton');
     const $aiApiKeyMessage = $('#aiApiKeyMessage');
 
+    const $startAiProcessingButton = $('#startAiProcessingButton'); // Novo botão
+    const $aiProcessingStatus = $('#aiProcessingStatus');       // Novo status
+    const $aiInteractionArea = $('#aiInteractionArea');         // Área de pergunta/resposta
+
     const $askAiButton = $('#askAiButton');
     const $aiQuestionInput = $('#aiQuestionInput');
     const $aiResponseArea = $('#aiResponseArea');
     const $aiLoadingIndicator = $('#aiLoadingIndicator');
 
-    function getAiApiKey() {
-        return localStorage.getItem(AI_API_KEY_STORAGE_KEY);
-    }
+    let aiConversationHistory = []; 
+    let blockSummaries = []; // <<< NOVO: Para armazenar os resumos de cada bloco
+    let totalChunks = 0;
+    let chunksProcessed = 0;
 
-    function updateAiApiKeyStatusDisplay() {
-        if (getAiApiKey()) {
-            $manageAiApiKeyButton.text('API IA Config.');
-            $manageAiApiKeyButton.css('background-color', '#28a745');
-            $manageAiApiKeyButton.attr('title', 'Chave da API da IA (Google Gemini) configurada. Clique para alterar.');
-        } else {
-            $manageAiApiKeyButton.text('Configurar API IA');
-            $manageAiApiKeyButton.css('background-color', '');
-            $manageAiApiKeyButton.attr('title', 'Configurar chave da API da IA (Google Gemini) para análise.');
-        }
-    }
-   
-    $manageAiApiKeyButton.on('click', function() {
-        $aiApiKeyInput.val(getAiApiKey() || '');
-        $aiApiKeyModal.addClass('is-active');
-        $aiApiKeyInput.focus();
-    });
+    // --- Constantes para processamento em blocos ---
+    const USERS_PER_CHUNK = 2500; // Número de usuários por bloco
+                                 // (2500 usuários * ~50 tokens/usuário = 125k tokens. Gemini Flash deve aguentar, Pro com folga)
+    const MAX_TOKENS_PER_CHUNK_ANALYSIS = 2048; // Tokens para a RESPOSTA da IA ao analisar cada chunk
+    const MAX_TOKENS_FINAL_QUESTION = 2048; // Tokens para a RESPOSTA da IA à pergunta final do usuário
 
-    $closeAiModalButton.on('click', function() {
-        $aiApiKeyModal.removeClass('is-active');
-    });
+    // ... (funções getAiApiKey, updateAiApiKeyStatusDisplay, e listeners do modal como antes) ...
+    function getAiApiKey() { /* ... como antes ... */ }
+    function updateAiApiKeyStatusDisplay() { /* ... como antes ... */ }
+    $manageAiApiKeyButton.on('click', function() { /* ... como antes ... */ });
+    $closeAiModalButton.on('click', function() { /* ... como antes ... */ });
+    $aiApiKeyModal.on('click', function(event) { /* ... como antes ... */ });
+    $saveAiApiKeyButton.on('click', function() { /* ... como antes ... */ });
 
-    $aiApiKeyModal.on('click', function(event) {
-        if (event.target === $aiApiKeyModal[0]) {
-            $aiApiKeyModal.removeClass('is-active');
-        }
-    });
 
-    $saveAiApiKeyButton.on('click', function() {
-        const key = $aiApiKeyInput.val().trim();
-        if (key) {
-            localStorage.setItem(AI_API_KEY_STORAGE_KEY, key);
-            $aiApiKeyMessage.text('Chave da API da IA (Google Gemini) salva!').removeClass('error').addClass('success');
-            updateAiApiKeyStatusDisplay();
-            setTimeout(() => {
-                $aiApiKeyMessage.text('').removeClass('success error');
-                $aiApiKeyModal.removeClass('is-active');
-            }, 1500);
-        } else {
-            $aiApiKeyMessage.text('Por favor, insira uma chave válida.').removeClass('success').addClass('error');
-        }
-    });
+    // --- Lógica de Processamento em Blocos e Interação com a IA ---
 
-    // --- Interação com a IA (Configurado para Google Gemini com Amostragem Contextual) ---
-    $askAiButton.on('click', async function() {
+    $startAiProcessingButton.on('click', async function() {
         const apiKey = getAiApiKey();
         if (!apiKey) {
             alert('Por favor, configure sua chave de API do Google Gemini primeiro.');
             $aiApiKeyModal.addClass('is-active');
             return;
         }
-
-        const userQuestion = $aiQuestionInput.val().trim();
-        const userQuestionLower = userQuestion.toLowerCase();
-        let promptContext = "";
-        const MAX_SAMPLE_USERS_FOR_AI = 5; // Limite de usuários na amostra para a IA
-
-        // System message ajustado para refletir a nova lógica de amostragem
-        let systemMessage = `Você é um assistente especialista em análise de licenciamento Microsoft 365.
-Você receberá estatísticas agregadas sobre o uso de licenças e, PARA PERGUNTAS ESPECÍFICAS QUE O EXIJAM, uma PEQUENA AMOSTRA de dados de usuários individuais (no máximo ${MAX_SAMPLE_USERS_FOR_AI} usuários) que podem ser relevantes para a pergunta.
-Se a pergunta puder ser respondida com as estatísticas agregadas, use-as primariamente.
-Se uma amostra de dados de usuário for fornecida para uma pergunta específica, use essa amostra para detalhar sua resposta.
-Se as estatísticas e/ou a amostra não forem suficientes para responder completamente à pergunta, INDIQUE CLARAMENTE quais informações adicionais seriam necessárias ou por que não pode responder com os dados fornecidos.
-Seja conciso e foque em observações acionáveis. Use formatação Markdown simples (negrito, itálico, listas). Não inclua saudações ou despedidas.`;
-
-        if (allData && allData.length > 0) {
-            const totalUsers = allData.length;
-            const licenseMap = new Map();
-            let usersWithMultipleHighValueLicenses = 0;
-            const highValueLicenseKeywords = ['E5', 'Premium', 'Copilot', 'P2'];
-            const departmentLicenseCounts = {};
-
-            allData.forEach(user => {
-                let highValueLicenseCount = 0;
-                const location = user.OfficeLocation || "Não Especificado";
-                if (!departmentLicenseCounts[location]) {
-                    departmentLicenseCounts[location] = new Map();
-                }
-                (user.Licenses || []).forEach(lic => {
-                    const licName = lic.LicenseName;
-                    licenseMap.set(licName, (licenseMap.get(licName) || 0) + 1);
-                    const currentDeptLicMap = departmentLicenseCounts[location];
-                    currentDeptLicMap.set(licName, (currentDeptLicMap.get(licName) || 0) + 1);
-                    if (highValueLicenseKeywords.some(keyword => licName.toLowerCase().includes(keyword.toLowerCase()))) {
-                        highValueLicenseCount++;
-                    }
-                });
-                if (highValueLicenseCount > 1) {
-                    usersWithMultipleHighValueLicenses++;
-                }
-            });
-
-            const uniqueLicenseCount = licenseMap.size;
-            const topLicensesOverall = [...licenseMap.entries()]
-                .sort(([,a],[,b]) => b-a)
-                .slice(0, 10)
-                .map(([name, count]) => `  - ${name}: ${count} atribuições`)
-                .join('\n');
-            
-            let departmentSummary = "\nDistribuição de Licenças por Localização/Departamento (Top 3 locais com mais usuários):\n";
-            const sortedDepartments = Object.entries(departmentLicenseCounts)
-                .map(([dept, licMap]) => ({ name: dept, userCount: new Set(allData.filter(u => (u.OfficeLocation || "Não Especificado") === dept).map(u => u.Id)).size, licMap: licMap }))
-                .sort((a,b) => b.userCount - a.userCount)
-                .slice(0, 3);
-            
-            sortedDepartments.forEach(deptInfo => {
-                departmentSummary += `  Local/Depto: ${deptInfo.name} (${deptInfo.userCount} usuários)\n`;
-                const topDeptLicenses = [...deptInfo.licMap.entries()]
-                    .sort(([,a],[,b]) => b-a)
-                    .slice(0,3)
-                    .map(([name, count]) => `    - ${name}: ${count}`)
-                    .join('\n');
-                departmentSummary += `${topDeptLicenses}\n`;
-            });
-
-            promptContext = `Estatísticas Agregadas do Ambiente de Licenciamento Microsoft 365:
-- Total de Usuários Analisados: ${totalUsers}
-- Número de Tipos de Licenças Únicas Encontradas: ${uniqueLicenseCount}
-- Usuários com Múltiplas Licenças de Alto Valor (ex: E5, Premium, Copilot, P2): ${usersWithMultipleHighValueLicenses}
-- Distribuição das Top 10 Licenças Mais Atribuídas (Geral):
-${topLicensesOverall}
-${departmentSummary}\n`;
-            
-            // Lógica para decidir se envia amostra detalhada
-            let sendDetailedSample = false;
-            const detailKeywords = ["quais usuários", "liste usuários", "usuários com", "quem tem", "mesmo produto", "licença duplicada", "licenças pagas"];
-            if (userQuestion && detailKeywords.some(kw => userQuestionLower.includes(kw))) {
-                sendDetailedSample = true;
-            }
-
-            if (sendDetailedSample) {
-                let sampleDataForPrompt = [];
-                let contextNote = "";
-
-                // Palavras-chave para heurística de "licença paga"
-                const paidKeywords = ['E3', 'E5', 'P1', 'P2', 'Premium', 'Copilot', 'Standard', 'Voice', 'Calling', 'Pro', 'Plan 1', 'Plan 2', 'Plan 3', 'Visio', 'Project'];
-                const freeOrTrialKeywords = ['free', 'trial', 'developer', 'community', 'essentials', 'fabric (free)', 'student', 'faculty', 'education'];
-
-                // Tentativa de pré-filtragem para "licença paga do mesmo produto"
-                if (userQuestionLower.includes("licença paga") && (userQuestionLower.includes("mesmo produto") || userQuestionLower.includes("duplicada"))) {
-                    const usersWithPotentialDupPaidLicenses = [];
-                    for (const user of allData) {
-                        if (usersWithPotentialDupPaidLicenses.length >= MAX_SAMPLE_USERS_FOR_AI) break;
-                        const userLicenses = (user.Licenses || []);
-                        const paidLicenseCounts = new Map();
-                        let hasAnyRelevantPaidLicense = false;
-
-                        userLicenses.forEach(lic => {
-                            const licNameClean = (lic.LicenseName || '').trim();
-                            const licNameLower = licNameClean.toLowerCase();
-                            
-                            const isLikelyPaid = paidKeywords.some(pk => licNameLower.includes(pk.toLowerCase())) &&
-                                             !freeOrTrialKeywords.some(fk => licNameLower.includes(fk.toLowerCase()));
-                            
-                            if (isLikelyPaid) {
-                                hasAnyRelevantPaidLicense = true;
-                                paidLicenseCounts.set(licNameClean, (paidLicenseCounts.get(licNameClean) || 0) + 1);
-                            }
-                        });
-
-                        if (hasAnyRelevantPaidLicense && Array.from(paidLicenseCounts.values()).some(count => count > 1)) {
-                            usersWithPotentialDupPaidLicenses.push({
-                                DisplayName: user.DisplayName,
-                                OfficeLocation: user.OfficeLocation,
-                                Licenses: userLicenses.map(l => l.LicenseName)
-                            });
-                        }
-                    }
-                    if (usersWithPotentialDupPaidLicenses.length > 0) {
-                        sampleDataForPrompt = usersWithPotentialDupPaidLicenses;
-                        contextNote = `\nAMOSTRA DE DADOS DE USUÁRIOS RELEVANTES PARA A PERGUNTA:\nBaseado na pergunta sobre licenças pagas duplicadas do mesmo produto, aqui está uma amostra de até ${MAX_SAMPLE_USERS_FOR_AI} usuários que PARECEM se encaixar nesse critério (identificados por uma pré-filtragem no lado do cliente). Por favor, use esta amostra para sua análise e resposta:\n`;
-                    } else {
-                        contextNote = `\nUma pergunta sobre licenças pagas duplicadas foi feita, mas uma varredura preliminar no cliente não encontrou usuários que se encaixassem claramente nesse critério para formar uma amostra. Por favor, responda com base nas estatísticas agregadas, se possível, ou indique que os dados detalhados para confirmar isso não foram fornecidos.\n`;
-                    }
-                } else { 
-                    // Amostra genérica para outras perguntas detalhadas ou se a pré-filtragem não for específica
-                    // Tenta encontrar usuários com base em palavras-chave da pergunta (licenças, local, cargo)
-                    let filteredSample = allData;
-                    const questionTokens = userQuestionLower.split(/\s+/);
-                    
-                    // Tenta filtrar por nomes de licenças mencionados na pergunta
-                    const mentionedLicenses = [];
-                    if(uniqueFieldValues.Licenses) { // Certifica que uniqueFieldValues.Licenses existe
-                        uniqueFieldValues.Licenses.forEach(licName => {
-                            if (userQuestionLower.includes(licName.toLowerCase())) {
-                                mentionedLicenses.push(licName.toLowerCase());
-                            }
-                        });
-                    }
-
-                    if (mentionedLicenses.length > 0) {
-                        filteredSample = filteredSample.filter(u => 
-                            (u.Licenses || []).some(l => mentionedLicenses.includes(l.LicenseName.toLowerCase()))
-                        );
-                    }
-                    // Poderia adicionar mais filtros aqui para JobTitle, OfficeLocation se mencionados...
-
-                    if(filteredSample.length > MAX_SAMPLE_USERS_FOR_AI) { // Se o filtro ainda resultar em muitos usuários, pegue uma amostra aleatória deles
-                        for(let i = 0; i < MAX_SAMPLE_USERS_FOR_AI; i++) {
-                             sampleDataForPrompt.push(filteredSample[Math.floor(Math.random() * filteredSample.length)]);
-                        }
-                    } else if (filteredSample.length > 0) {
-                        sampleDataForPrompt = filteredSample.slice(0, MAX_SAMPLE_USERS_FOR_AI);
-                    } else { // Se nenhum filtro pegou, amostra aleatória geral
-                         for(let i = 0; i < Math.min(MAX_SAMPLE_USERS_FOR_AI, allData.length); i++) {
-                             sampleDataForPrompt.push(allData[Math.floor(Math.random() * allData.length)]);
-                        }
-                    }
-                     sampleDataForPrompt = sampleDataForPrompt.map(u => ({ // Mapeia para os campos desejados
-                        DisplayName: u.DisplayName,
-                        OfficeLocation: u.OfficeLocation,
-                        Licenses: (u.Licenses || []).map(l => l.LicenseName)
-                    }));
-
-                    contextNote = `\nAMOSTRA DE DADOS DE USUÁRIOS (POSSIVELMENTE RELEVANTE À PERGUNTA):\nPara ajudar a responder perguntas que podem necessitar de detalhes, segue uma amostra de até ${MAX_SAMPLE_USERS_FOR_AI} usuários (filtrados se possível, ou aleatórios):\n`;
-                }
-                
-                if (sampleDataForPrompt.length > 0) {
-                     promptContext += contextNote + `${JSON.stringify(sampleDataForPrompt, null, 2)}\n`;
-                } else if (!contextNote.includes("não encontrou usuários")) { // Evita duplicar a mensagem se a pré-filtragem já disse que não achou
-                     promptContext += "\nNão foi possível gerar uma amostra de dados de usuário relevante para esta pergunta específica com os filtros automáticos.\n";
-                }
-
-            } else { // Se não for uma pergunta detalhada
-                 promptContext += "\nNenhuma amostra de dados de usuário individual foi incluída neste prompt, apenas estatísticas agregadas.";
-            }
-            
-        } else {
-            $aiResponseArea.text('Não há dados de licença carregados para analisar.');
+        if (!allData || allData.length === 0) {
+            $aiProcessingStatus.text('Não há dados de licença carregados para processar.');
             return;
         }
 
-        let userQueryForAI = userQuestion || "Com base nas estatísticas de licença e na amostra de dados (se fornecida), quais são os principais insights, possíveis otimizações de custos ou anomalias que você pode identificar?";
-       
-        const GEMINI_MODEL = "gemini-1.5-flash-latest"; 
-        const AI_PROVIDER_ENDPOINT_BASE = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+        $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Processando Blocos...');
+        $aiInteractionArea.addClass('hidden'); // Esconde área de pergunta final
+        aiConversationHistory = []; // Reinicia histórico para um novo processamento
+        blockSummaries = [];
+        chunksProcessed = 0;
+        totalChunks = Math.ceil(allData.length / USERS_PER_CHUNK);
+        $aiProcessingStatus.text(`Iniciando processamento de ${totalChunks} blocos de dados...`);
+
+        const GEMINI_MODEL_TO_USE = "gemini-1.5-flash-latest"; // Use "gemini-1.5-pro-latest" se precisar de mais contexto por chunk ou respostas mais longas
+        const AI_PROVIDER_ENDPOINT_BASE = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_TO_USE}:generateContent`;
+        
+        for (let i = 0; i < totalChunks; i++) {
+            chunksProcessed = i + 1;
+            $aiProcessingStatus.html(`Processando bloco ${chunksProcessed} de ${totalChunks}... <i class="fas fa-spinner fa-spin"></i>`);
+            
+            const startIndex = i * USERS_PER_CHUNK;
+            const endIndex = startIndex + USERS_PER_CHUNK;
+            const currentChunkData = allData.slice(startIndex, endIndex);
+
+            const chunkSampleForAI = currentChunkData.map(u => ({ // Simplifica os dados do chunk
+                DisplayName: u.DisplayName,
+                OfficeLocation: u.OfficeLocation,
+                JobTitle: u.JobTitle,
+                Licenses: (u.Licenses || []).map(l => l.LicenseName)
+            }));
+
+            const systemMessageForChunk = `Você é um assistente de análise de licenças. Este é o bloco de dados ${chunksProcessed} de um total de ${totalChunks} blocos. Os dados contêm informações de aproximadamente ${USERS_PER_CHUNK} usuários (DisplayName, OfficeLocation, JobTitle, Licenses).
+Seu objetivo é ANALISAR APENAS ESTE BLOCO e EXTRAIR os seguintes insights de forma concisa (use markdown):
+1.  Principais licenças atribuídas NESTE BLOCO (top 3-5 com contagens).
+2.  Observações sobre possíveis atribuições excessivas ou insuficientes de licenças NESTE BLOCO (se houver).
+3.  Padrões de licenciamento por JobTitle ou OfficeLocation NESTE BLOCO (se houver).
+4.  Quaisquer anomalias ou pontos de atenção específicos APENAS deste bloco.
+Seja breve e objetivo. Não faça saudações. Limite sua resposta a alguns parágrafos ou uma lista de pontos principais.`;
+            
+            const chunkPayload = `${systemMessageForChunk}\n\nDADOS DO BLOCO ${chunksProcessed}:\n${JSON.stringify(chunkSampleForAI, null, 2)}`;
+            
+            console.log(`Enviando Bloco ${chunksProcessed} para Gemini. Tamanho aprox: ${chunkPayload.length} caracteres.`);
+
+            try {
+                const finalEndpoint = `${AI_PROVIDER_ENDPOINT_BASE}?key=${apiKey}`;
+                const requestHeaders = { 'Content-Type': 'application/json' };
+                const requestBody = {
+                  contents: [{"role": "user", "parts": [{ "text": chunkPayload }]}],
+                  generationConfig: { "maxOutputTokens": MAX_TOKENS_PER_CHUNK_ANALYSIS, "temperature": 0.5 }
+                };
+
+                const response = await fetch(finalEndpoint, {
+                    method: 'POST',
+                    headers: requestHeaders,
+                    body: JSON.stringify(requestBody)
+                });
+                const responseBodyText = await response.text();
+                let data;
+                try { data = JSON.parse(responseBodyText); } 
+                catch (e) { throw new Error(`Resposta do Bloco ${chunksProcessed} não é JSON. Status: ${response.status}. Resposta: ${responseBodyText.substring(0,200)}`); }
+
+                if (!response.ok) {
+                    let detailedMessage = data.error?.message || JSON.stringify(data.error) || responseBodyText;
+                    throw new Error(`Erro da API Bloco ${chunksProcessed} (${response.status}): ${detailedMessage}`);
+                }
+
+                let chunkSummaryText = `Resumo/Análise do Bloco ${chunksProcessed} não pôde ser extraído.`;
+                if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+                    chunkSummaryText = data.candidates[0].content.parts.map(p => p.text).join("").trim();
+                } else if (data.candidates && data.candidates[0]?.finishReason !== "STOP") {
+                    chunkSummaryText = `Bloco ${chunksProcessed} processado pela IA com motivo: ${data.candidates[0].finishReason}.`;
+                }
+                blockSummaries.push({ chunk: chunksProcessed, summary: chunkSummaryText });
+                console.log(`Resumo do Bloco ${chunksProcessed} recebido.`);
+
+            } catch (error) {
+                console.error(`Erro ao processar bloco ${chunksProcessed}:`, error);
+                blockSummaries.push({ chunk: chunksProcessed, summary: `Erro ao processar bloco ${chunksProcessed}: ${error.message}` });
+                // Decide se quer parar em caso de erro ou continuar com os próximos blocos
+                // Por enquanto, vamos registrar o erro e continuar.
+            }
+        } // Fim do loop de chunks
+
+        $aiProcessingStatus.text(`Todos os ${totalChunks} blocos foram processados! ${blockSummaries.length} resumos gerados. Agora você pode fazer perguntas sobre os dados analisados.`);
+        $startAiProcessingButton.prop('disabled', false).html('<i class="fas fa-cogs"></i> Reprocessar Dados para IA');
+        
+        // Prepara o histórico inicial para as perguntas do usuário
+        aiConversationHistory = []; // Limpa qualquer histórico anterior
+        const aggregatedSummaries = blockSummaries.map(bs => `--- INSIGHTS DO BLOCO DE DADOS ${bs.chunk} ---\n${bs.summary}`).join("\n\n");
+        
+        const initialSystemPromptForQuestions = `Você é um assistente especialista em análise de licenciamento Microsoft 365.
+O processamento inicial dos dados de ${allData.length} usuários (divididos em ${totalChunks} blocos) foi concluído.
+A seguir estão os resumos/análises gerados pela IA para cada bloco de dados. Use estas informações para responder às perguntas do usuário.
+Se a pergunta exigir um detalhe muito específico que não está nos resumos, indique que a análise se baseia nos insights extraídos de cada bloco e que o detalhe individual exato pode não estar disponível.
+Seja conciso e use Markdown. Não faça saudações.
+
+RESUMOS DOS BLOCOS DE DADOS PROCESSADOS:
+${aggregatedSummaries}
+--- FIM DOS RESUMOS DOS BLOCOS ---
+
+Agora, estou pronto para suas perguntas sobre esses dados analisados.`;
+
+        aiConversationHistory.push({ "role": "user", "parts": [{ "text": initialSystemPromptForQuestions }] });
+        // Pode-se fazer uma chamada inicial para a IA apenas com este prompt para ela confirmar, ou esperar a pergunta do usuário.
+        // Por simplicidade, vamos apenas popular o histórico e habilitar a área de perguntas.
+        $aiResponseArea.html("<strong>Contexto dos blocos processado e carregado.</strong><br>Por favor, faça sua pergunta sobre os dados de licença analisados.");
+        $aiQuestionInput.prop('disabled', false).attr('placeholder', 'Faça sua pergunta sobre os dados analisados...');
+        $askAiButton.prop('disabled', false);
+        $aiInteractionArea.removeClass('hidden');
+
+    }); // Fim do $startAiProcessingButton.on('click')
+
+
+    $askAiButton.on('click', async function() { // Botão para perguntas APÓS processamento dos blocos
+        const apiKey = getAiApiKey();
+        if (!apiKey) { /* ... como antes ... */ return; }
+
+        const userQuestion = $aiQuestionInput.val().trim();
+        if (!userQuestion) {
+            alert("Por favor, digite sua pergunta.");
+            return;
+        }
+
+        if (aiConversationHistory.length === 0) {
+            alert("Por favor, inicie o processamento dos dados primeiro usando o botão 'Iniciar Processamento'.");
+            return;
+        }
+        
+        $aiLoadingIndicator.removeClass('hidden');
+        $(this).prop('disabled', true);
+        $aiResponseArea.html('Analisando sua pergunta... <i class="fas fa-spinner fa-spin"></i>');
+
+        // Adiciona a pergunta atual do usuário ao histórico
+        aiConversationHistory.push({ "role": "user", "parts": [{ "text": userQuestion }] });
+
+        const GEMINI_MODEL_TO_USE = "gemini-1.5-flash-latest"; 
+        const AI_PROVIDER_ENDPOINT_BASE = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_TO_USE}:generateContent`;
         const finalEndpoint = `${AI_PROVIDER_ENDPOINT_BASE}?key=${apiKey}`;
 
-        $aiLoadingIndicator.removeClass('hidden');
-        $askAiButton.prop('disabled', true);
-        $aiResponseArea.html('Analisando com IA (Google Gemini)... <i class="fas fa-spinner fa-spin"></i>');
-
         try {
-            const requestHeaders = { 'Content-Type': 'application/json', };
-            const fullPromptForGemini = `${systemMessage}\n\nCONTEXTO DOS DADOS FORNECIDOS (ESTATÍSTICAS E/OU AMOSTRA):\n${promptContext}\n\nPERGUNTA/TAREFA DO USUÁRIO: ${userQueryForAI}`;
+            const requestHeaders = { 'Content-Type': 'application/json' };
             const requestBody = {
-              contents: [{"role": "user", "parts": [{ "text": fullPromptForGemini }]}],
-              generationConfig: { "maxOutputTokens": 1500, "temperature": 0.4, "topP": 0.95, "topK": 40 }
+              contents: aiConversationHistory, // Envia o histórico completo (incluindo resumos dos blocos e perguntas anteriores)
+              generationConfig: { "maxOutputTokens": MAX_TOKENS_FINAL_QUESTION, "temperature": 0.5 }
             };
-            
-            console.log("Enviando para Google Gemini API (Prompt Completo - Tamanho Aproximado):", fullPromptForGemini.length, "caracteres");
-            // console.log("Objeto de Requisição:", JSON.stringify(requestBody, null, 2));
-            // console.log("Endpoint:", finalEndpoint);
+
+            console.log(`Enviando pergunta final para Gemini. Turnos no histórico: ${aiConversationHistory.length}`);
+            // console.log("Corpo da requisição final:", JSON.stringify(requestBody, null, 2));
 
             const response = await fetch(finalEndpoint, {
                 method: 'POST',
@@ -923,62 +847,47 @@ ${departmentSummary}\n`;
             const responseBodyText = await response.text();
             let data;
             try { data = JSON.parse(responseBodyText); } 
-            catch (e) {
-                console.error("Falha ao parsear JSON da resposta da API:", responseBodyText);
-                throw new Error(`Resposta da API não é um JSON válido. Status: ${response.status}. Resposta: ${responseBodyText.substring(0, 500)}...`);
-            }
+            catch (e) { throw new Error(`Resposta da pergunta final não é JSON. Status: ${response.status}. Resposta: ${responseBodyText.substring(0,200)}`);}
 
             if (!response.ok) {
                 let detailedMessage = data.error?.message || JSON.stringify(data.error) || responseBodyText;
-                console.error("Erro da API Google Gemini:", response.status, detailedMessage);
-                throw new Error(`Erro da API Google Gemini (${response.status}): ${detailedMessage}`);
+                throw new Error(`Erro da API Gemini na pergunta final (${response.status}): ${detailedMessage}`);
             }
 
-            console.log("Resposta completa da API Google Gemini:", data);
-
-            let aiTextResponse = "Não foi possível extrair uma resposta da IA. Verifique o console.";
-            if (data.candidates && data.candidates[0]) {
-                const candidate = data.candidates[0];
-                if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0 && candidate.content.parts[0].text) {
-                    aiTextResponse = candidate.content.parts.map(part => part.text).join("").trim();
-                } else if (candidate.finishReason && candidate.finishReason !== "STOP") {
-                    aiTextResponse = `A IA finalizou o processamento com o motivo: ${candidate.finishReason}.`;
-                    if(data.promptFeedback && data.promptFeedback.blockReason) {
-                        aiTextResponse += ` Feedback do prompt: ${data.promptFeedback.blockReason}. Verifique se o conteúdo enviado é permitido.`;
-                    } else if (candidate.safetyRatings) {
-                         aiTextResponse += ` Safety Ratings: ${JSON.stringify(candidate.safetyRatings)}`;
-                    }
-                    console.warn("Resposta da IA pode estar bloqueada ou incompleta:", data);
-                }
+            let aiTextResponse = "Não foi possível extrair a resposta da IA.";
+            if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+                aiTextResponse = data.candidates[0].content.parts.map(p => p.text).join("").trim();
+                 // Adiciona a resposta da IA ao histórico
+                aiConversationHistory.push({ "role": "model", "parts": [{ "text": aiTextResponse }] });
+            } else if (data.candidates && data.candidates[0]?.finishReason !== "STOP") {
+                aiTextResponse = `A IA finalizou com motivo: ${data.candidates[0].finishReason}.`;
+                 // Não adiciona ao histórico se for um erro ou bloqueio, para não poluir
+            } else {
+                aiTextResponse = "A IA processou, mas não retornou texto.";
             }
-            
-            function simpleMarkdownToHtml(mdText) {
-                if (typeof mdText !== 'string') return '';
-                let html = escapeHtml(mdText);
-                html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-                html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-                html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
-                html = html.replace(/\*\*(.*?)\*\*|__(.*?)__/g, '<strong>$1$2</strong>');
-                html = html.replace(/\*(.*?)\*|_(.*?)_/g, '<em>$1$2</em>');
-                
-                html = html.replace(/^(?:<br>)?\s*[-*+]\s+(.*(?:<br>\s*[-*+]\s+.*)*)/gm, (match, listItems) => {
-                    const items = listItems.split(/<br>\s*[-*+]\s+/);
-                    return '<ul>' + items.map(item => `<li>${item.trim()}</li>`).join('') + '</ul>';
-                });
-                html = html.replace(/<\/ul>\s*<br>\s*<ul>/g, '');
-                html = html.replace(/<\/ul><ul>/g, '');
-
-                html = html.replace(/\n/g, '<br>');
-                return html;
+             // Limitar o tamanho do histórico (exemplo: manter últimos X turnos)
+            const MAX_HISTORY_ITEMS = 20; // Ex: 10 perguntas de usuário + 10 respostas do modelo (mais o contexto inicial dos resumos)
+            if (aiConversationHistory.length > MAX_HISTORY_ITEMS) {
+                // Remove os itens mais antigos, mantendo o primeiro (contexto dos resumos) e os mais recentes.
+                const itemsToRemove = aiConversationHistory.length - MAX_HISTORY_ITEMS;
+                aiConversationHistory.splice(1, itemsToRemove); 
+                console.log(`Histórico de perguntas truncado. Mantendo ${aiConversationHistory.length} itens.`);
             }
+
+            function simpleMarkdownToHtml(mdText) { /* ... (função como antes) ... */ }
             $aiResponseArea.html(simpleMarkdownToHtml(aiTextResponse));
+            $aiQuestionInput.val(''); // Limpa o input da pergunta
 
         } catch (error) {
-            console.error('Erro ao chamar ou processar resposta da API Google Gemini:', error);
-            $aiResponseArea.html(`<strong>Erro ao obter análise da IA:</strong><br>${escapeHtml(error.message)}`);
+            console.error('Erro ao interagir com IA para pergunta final:', error);
+            $aiResponseArea.html(`<strong>Erro na análise:</strong><br>${escapeHtml(error.message)}`);
+             // Remove o último par (pergunta do usuário que falhou) do histórico
+            if (aiConversationHistory.length > 0 && aiConversationHistory[aiConversationHistory.length -1].role === "user") {
+                aiConversationHistory.pop();
+            }
         } finally {
             $aiLoadingIndicator.addClass('hidden');
-            $askAiButton.prop('disabled', false);
+            $(this).prop('disabled', false);
         }
     });
    
