@@ -51,14 +51,14 @@ $skuIdMap = @{
 }
 
 # Define concurrent task limit
-$throttleLimit = 5 
+$throttleLimit = 5
 $jobs = @()
 $allEntries = @() # Stores results from all jobs
 
 # Iterate over each SkuID to fetch users
 foreach ($skuId in $skuIdMap.Keys) {
     $skuName = $skuIdMap[$skuId]
-    
+
     # Throttle job creation
     while (($jobs | Where-Object State -eq 'Running').Count -ge $throttleLimit) {
         Start-Sleep -Seconds 1
@@ -67,14 +67,14 @@ foreach ($skuId in $skuIdMap.Keys) {
 
     $jobs += Start-ThreadJob -Name "GetUsers_$($skuName -replace '\W','_')" -ScriptBlock {
         param($skuIdParam, $skuNameParam)
-        
+
         $mgUserParams = @{
             Filter           = "assignedLicenses/any(u:u/skuId eq $($skuIdParam))"
             ConsistencyLevel = 'eventual' # Necessary for advanced queries on Azure AD
             All              = $true       # Retrieve all users matching the filter
             Select           = 'id,userPrincipalName,displayName,jobTitle,officeLocation,businessPhones'
         }
-        
+
         try {
             $users = Get-MgUser @mgUserParams -ErrorAction Stop
             $outputObjects = @()
@@ -86,7 +86,7 @@ foreach ($skuId in $skuIdMap.Keys) {
                     JobTitle       = $user.JobTitle
                     OfficeLocation = $user.OfficeLocation
                     BusinessPhones = if ($user.BusinessPhones) { $user.BusinessPhones -join "; " } else { "" }
-                    LicenseName    = $skuNameParam 
+                    LicenseName    = $skuNameParam
                     SkuId          = $skuIdParam
                 }
             }
@@ -97,7 +97,7 @@ foreach ($skuId in $skuIdMap.Keys) {
             return $null # Return null on error for this job
         }
     } -ArgumentList $skuId, $skuName
-    
+
     Write-Host "Task started for license '$skuName'" -ForegroundColor DarkCyan
 }
 
@@ -188,13 +188,13 @@ $simpleHtmlContent = @"
 
 <div id="loadingOverlay" style="display: none;">
   <div class="loader-content">
-    <p>Loading...</p>
+    <p id="loaderMessageText">Loading...</p>
     </div>
 </div>
 
     <script>
-        // PowerShell will replace $json with actual user data
-        const userData = $json; 
+        // PowerShell will replace json with actual user data
+        const userData = $json;
     </script>
     <aside>
         <a href="https://github.com/pedr-moura" target="_blank" class="sidebar-link">
@@ -207,6 +207,7 @@ $simpleHtmlContent = @"
     <div class="content-container">
         <header>
             <h1><i class="fas fa-id-card-alt" style="margin-right: 0.5rem;"></i>License Management</h1>
+            <button id="manageAiApiKeyButton" class="button button-blue" style="font-size: 0.8em; padding: 0.5rem 0.8rem; margin-left: auto;">Configurar API da IA</button>
         </header>
         <main>
             <div class="grid-container grid-container-md section-spacing">
@@ -217,7 +218,7 @@ $simpleHtmlContent = @"
                         <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="1" checked /><span class="checkbox-text">Name</span></label>
                         <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="2" checked /><span class="checkbox-text">Email</span></label>
                         <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="3" checked /><span class="checkbox-text">Job Title</span></label>
-                        <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="4" /><span class="checkbox-text">Location</span></label> 
+                        <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="4" /><span class="checkbox-text">Location</span></label>
                         <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="5" /><span class="checkbox-text">Phones</span></label>
                         <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="6" checked /><span class="checkbox-text">Licenses</span></label>
                     </div>
@@ -249,6 +250,31 @@ $simpleHtmlContent = @"
                     </div>
                 </div>
             </div>
+
+            <div class="card section-spacing">
+                <h2><i class="fas fa-brain" style="margin-right: 0.5rem;"></i>Análise com Inteligência Artificial</h2>
+                
+                <div id="aiApiKeyModal" class="modal hidden"> <div class="modal-content">
+                        <span class="close-button" id="closeAiModalButton">&times;</span>
+                        <h3>Configurar Chave da API da IA</h3>
+                        <p>Insira sua chave de API para a funcionalidade de análise. Ela será armazenada localmente no seu navegador.</p>
+                        <p class="warning-text"><strong>Aviso:</strong> Para sua segurança, use este método apenas para testes ou com chaves de API que não tenham implicações de custo significativas ou acesso a dados sensíveis se expostas.</p>
+                        <input type="password" id="aiApiKeyInput" placeholder="Sua chave da API da IA" style="width: calc(100% - 22px); padding: 10px; margin-bottom: 15px; border: 1px solid #4a5568; border-radius: 4px; font-size: 1em; background-color: #1a202c; color: #e2e8f0;">
+                        <button id="saveAiApiKeyButton" class="button button-blue" style="margin-top:10px; width:100%;">Salvar Chave IA</button>
+                        <p id="aiApiKeyMessage" style="font-size:0.9em; margin-top:8px;"></p>
+                    </div>
+                </div>
+
+                <div id="aiInteractionArea" style="margin-top:1rem;">
+                    <textarea id="aiQuestionInput" class="search-input" placeholder="Faça uma pergunta sobre os dados de licença ou deixe em branco para um resumo geral..." style="width:100%; min-height: 60px; margin-bottom:10px; background-color: #1a202c; color: #e2e8f0;"></textarea>
+                    <button id="askAiButton" class="button button-blue" style="width:auto; padding: 0.5rem 1rem;"><i class="fas fa-paper-plane" style="margin-right: 0.5rem;"></i> Perguntar à IA</button>
+                    <p id="aiLoadingIndicator" class="hidden" style="text-align:left; margin-top:10px; color: #a0aec0;">Analisando com IA...</p>
+                    <div id="aiResponseArea" style="margin-top: 15px; padding:15px; border: 1px solid #4a5568; border-radius:6px; min-height:70px; background-color: #1a202c; color: #cbd5e0; white-space: pre-wrap; word-wrap: break-word;">
+                        Aguardando análise...
+                    </div>
+                </div>
+            </div>
+
             <div class="card">
                 <table id="licenseTable" class="table-container display responsive" style="width:100%">
                     <thead class="table-header">
@@ -299,7 +325,7 @@ try {
     Write-Host "Report saved to: $ReportHtmlPath" -ForegroundColor Green
 }
 catch {
-    Write-Error "Failed to save the HTML report file: $($_.Exception.Message)" 
+    Write-Error "Failed to save the HTML report file: $($_.Exception.Message)"
 }
 
 # Clean up jobs
