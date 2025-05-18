@@ -1,6 +1,6 @@
 $(document).ready(function() {
     let table = null, allData = [], nameConflicts = new Set(), dupLicUsers = new Set();
-    const DEBOUNCE_DELAY = 350; // Milliseconds
+    const DEBOUNCE_DELAY = 350;
     let multiSearchDebounceTimer;
 
     const searchableColumnsConfig = [
@@ -87,8 +87,7 @@ $(document).ready(function() {
     }
 
     function initTable(data) {
-        allData = data;
-
+        allData = data; 
         if ($('#licenseDatalist').length === 0) { $('body').append('<datalist id="licenseDatalist"></datalist>'); }
         const $licenseDatalist = $('#licenseDatalist').empty();
         if (uniqueFieldValues.Licenses) {
@@ -643,7 +642,7 @@ $(document).ready(function() {
     // ===========================================================
     // FUNCIONALIDADE DE IA - INÍCIO (Configurado para Google Gemini)
     // ===========================================================
-    const AI_API_KEY_STORAGE_KEY = 'licenseAiApiKey_v1_google'; // Chave específica para Google
+    const AI_API_KEY_STORAGE_KEY = 'licenseAiApiKey_v1_google';
 
     const $manageAiApiKeyButton = $('#manageAiApiKeyButton');
     const $aiApiKeyModal = $('#aiApiKeyModal');
@@ -657,7 +656,6 @@ $(document).ready(function() {
     const $aiResponseArea = $('#aiResponseArea');
     const $aiLoadingIndicator = $('#aiLoadingIndicator');
 
-    // --- Gerenciamento da Chave API da IA ---
     function getAiApiKey() {
         return localStorage.getItem(AI_API_KEY_STORAGE_KEY);
     }
@@ -705,9 +703,9 @@ $(document).ready(function() {
         }
     });
 
-    // --- Interação com a IA (Configurado para Google Gemini) ---
+    // --- Interação com a IA (Configurado para Google Gemini com Amostragem Contextual) ---
     $askAiButton.on('click', async function() {
-        const apiKey = getAiApiKey(); // Esta é a SUA CHAVE API DO GOOGLE GEMINI
+        const apiKey = getAiApiKey();
         if (!apiKey) {
             alert('Por favor, configure sua chave de API do Google Gemini primeiro.');
             $aiApiKeyModal.addClass('is-active');
@@ -715,10 +713,17 @@ $(document).ready(function() {
         }
 
         const userQuestion = $aiQuestionInput.val().trim();
+        const userQuestionLower = userQuestion.toLowerCase();
         let promptContext = "";
-        // Ajuste o systemMessage para ser mais adequado ao Gemini, se necessário, ou mantenha genérico.
-        let systemMessage = `Você é um assistente especialista em análise de licenciamento Microsoft 365. Use o contexto fornecido (estatísticas agregadas e uma pequena amostra de dados, se houver) para responder à pergunta do usuário ou fornecer insights gerais sobre os dados de licença. Seja conciso, foque em observações acionáveis e use formatação Markdown simples (negrito, itálico, listas) para clareza. Não inclua saudações ou despedidas.`;
+        const MAX_SAMPLE_USERS_FOR_AI = 5; // Limite de usuários na amostra para a IA
 
+        // System message ajustado para refletir a nova lógica de amostragem
+        let systemMessage = `Você é um assistente especialista em análise de licenciamento Microsoft 365.
+Você receberá estatísticas agregadas sobre o uso de licenças e, PARA PERGUNTAS ESPECÍFICAS QUE O EXIJAM, uma PEQUENA AMOSTRA de dados de usuários individuais (no máximo ${MAX_SAMPLE_USERS_FOR_AI} usuários) que podem ser relevantes para a pergunta.
+Se a pergunta puder ser respondida com as estatísticas agregadas, use-as primariamente.
+Se uma amostra de dados de usuário for fornecida para uma pergunta específica, use essa amostra para detalhar sua resposta.
+Se as estatísticas e/ou a amostra não forem suficientes para responder completamente à pergunta, INDIQUE CLARAMENTE quais informações adicionais seriam necessárias ou por que não pode responder com os dados fornecidos.
+Seja conciso e foque em observações acionáveis. Use formatação Markdown simples (negrito, itálico, listas). Não inclua saudações ou despedidas.`;
 
         if (allData && allData.length > 0) {
             const totalUsers = allData.length;
@@ -733,14 +738,11 @@ $(document).ready(function() {
                 if (!departmentLicenseCounts[location]) {
                     departmentLicenseCounts[location] = new Map();
                 }
-
                 (user.Licenses || []).forEach(lic => {
                     const licName = lic.LicenseName;
                     licenseMap.set(licName, (licenseMap.get(licName) || 0) + 1);
-                    
                     const currentDeptLicMap = departmentLicenseCounts[location];
                     currentDeptLicMap.set(licName, (currentDeptLicMap.get(licName) || 0) + 1);
-
                     if (highValueLicenseKeywords.some(keyword => licName.toLowerCase().includes(keyword.toLowerCase()))) {
                         highValueLicenseCount++;
                     }
@@ -773,50 +775,144 @@ $(document).ready(function() {
                 departmentSummary += `${topDeptLicenses}\n`;
             });
 
-            promptContext = `Análise do Ambiente de Licenciamento Microsoft 365:\n- Total de Usuários Analisados: ${totalUsers}\n- Número de Tipos de Licenças Únicas Encontradas: ${uniqueLicenseCount}\n- Usuários com Múltiplas Licenças de Alto Valor (ex: E5, Premium, Copilot, P2): ${usersWithMultipleHighValueLicenses}\n- Distribuição das Top 10 Licenças Mais Atribuídas (Geral):\n${topLicensesOverall}\n${departmentSummary}\nCom base nestas estatísticas agregadas, e não em dados individuais de usuários, responda à pergunta ou forneça insights.`;
+            promptContext = `Estatísticas Agregadas do Ambiente de Licenciamento Microsoft 365:
+- Total de Usuários Analisados: ${totalUsers}
+- Número de Tipos de Licenças Únicas Encontradas: ${uniqueLicenseCount}
+- Usuários com Múltiplas Licenças de Alto Valor (ex: E5, Premium, Copilot, P2): ${usersWithMultipleHighValueLicenses}
+- Distribuição das Top 10 Licenças Mais Atribuídas (Geral):
+${topLicensesOverall}
+${departmentSummary}\n`;
+            
+            // Lógica para decidir se envia amostra detalhada
+            let sendDetailedSample = false;
+            const detailKeywords = ["quais usuários", "liste usuários", "usuários com", "quem tem", "mesmo produto", "licença duplicada", "licenças pagas"];
+            if (userQuestion && detailKeywords.some(kw => userQuestionLower.includes(kw))) {
+                sendDetailedSample = true;
+            }
+
+            if (sendDetailedSample) {
+                let sampleDataForPrompt = [];
+                let contextNote = "";
+
+                // Palavras-chave para heurística de "licença paga"
+                const paidKeywords = ['E3', 'E5', 'P1', 'P2', 'Premium', 'Copilot', 'Standard', 'Voice', 'Calling', 'Pro', 'Plan 1', 'Plan 2', 'Plan 3', 'Visio', 'Project'];
+                const freeOrTrialKeywords = ['free', 'trial', 'developer', 'community', 'essentials', 'fabric (free)', 'student', 'faculty', 'education'];
+
+                // Tentativa de pré-filtragem para "licença paga do mesmo produto"
+                if (userQuestionLower.includes("licença paga") && (userQuestionLower.includes("mesmo produto") || userQuestionLower.includes("duplicada"))) {
+                    const usersWithPotentialDupPaidLicenses = [];
+                    for (const user of allData) {
+                        if (usersWithPotentialDupPaidLicenses.length >= MAX_SAMPLE_USERS_FOR_AI) break;
+                        const userLicenses = (user.Licenses || []);
+                        const paidLicenseCounts = new Map();
+                        let hasAnyRelevantPaidLicense = false;
+
+                        userLicenses.forEach(lic => {
+                            const licNameClean = (lic.LicenseName || '').trim();
+                            const licNameLower = licNameClean.toLowerCase();
+                            
+                            const isLikelyPaid = paidKeywords.some(pk => licNameLower.includes(pk.toLowerCase())) &&
+                                             !freeOrTrialKeywords.some(fk => licNameLower.includes(fk.toLowerCase()));
+                            
+                            if (isLikelyPaid) {
+                                hasAnyRelevantPaidLicense = true;
+                                paidLicenseCounts.set(licNameClean, (paidLicenseCounts.get(licNameClean) || 0) + 1);
+                            }
+                        });
+
+                        if (hasAnyRelevantPaidLicense && Array.from(paidLicenseCounts.values()).some(count => count > 1)) {
+                            usersWithPotentialDupPaidLicenses.push({
+                                DisplayName: user.DisplayName,
+                                OfficeLocation: user.OfficeLocation,
+                                Licenses: userLicenses.map(l => l.LicenseName)
+                            });
+                        }
+                    }
+                    if (usersWithPotentialDupPaidLicenses.length > 0) {
+                        sampleDataForPrompt = usersWithPotentialDupPaidLicenses;
+                        contextNote = `\nAMOSTRA DE DADOS DE USUÁRIOS RELEVANTES PARA A PERGUNTA:\nBaseado na pergunta sobre licenças pagas duplicadas do mesmo produto, aqui está uma amostra de até ${MAX_SAMPLE_USERS_FOR_AI} usuários que PARECEM se encaixar nesse critério (identificados por uma pré-filtragem no lado do cliente). Por favor, use esta amostra para sua análise e resposta:\n`;
+                    } else {
+                        contextNote = `\nUma pergunta sobre licenças pagas duplicadas foi feita, mas uma varredura preliminar no cliente não encontrou usuários que se encaixassem claramente nesse critério para formar uma amostra. Por favor, responda com base nas estatísticas agregadas, se possível, ou indique que os dados detalhados para confirmar isso não foram fornecidos.\n`;
+                    }
+                } else { 
+                    // Amostra genérica para outras perguntas detalhadas ou se a pré-filtragem não for específica
+                    // Tenta encontrar usuários com base em palavras-chave da pergunta (licenças, local, cargo)
+                    let filteredSample = allData;
+                    const questionTokens = userQuestionLower.split(/\s+/);
+                    
+                    // Tenta filtrar por nomes de licenças mencionados na pergunta
+                    const mentionedLicenses = [];
+                    if(uniqueFieldValues.Licenses) { // Certifica que uniqueFieldValues.Licenses existe
+                        uniqueFieldValues.Licenses.forEach(licName => {
+                            if (userQuestionLower.includes(licName.toLowerCase())) {
+                                mentionedLicenses.push(licName.toLowerCase());
+                            }
+                        });
+                    }
+
+                    if (mentionedLicenses.length > 0) {
+                        filteredSample = filteredSample.filter(u => 
+                            (u.Licenses || []).some(l => mentionedLicenses.includes(l.LicenseName.toLowerCase()))
+                        );
+                    }
+                    // Poderia adicionar mais filtros aqui para JobTitle, OfficeLocation se mencionados...
+
+                    if(filteredSample.length > MAX_SAMPLE_USERS_FOR_AI) { // Se o filtro ainda resultar em muitos usuários, pegue uma amostra aleatória deles
+                        for(let i = 0; i < MAX_SAMPLE_USERS_FOR_AI; i++) {
+                             sampleDataForPrompt.push(filteredSample[Math.floor(Math.random() * filteredSample.length)]);
+                        }
+                    } else if (filteredSample.length > 0) {
+                        sampleDataForPrompt = filteredSample.slice(0, MAX_SAMPLE_USERS_FOR_AI);
+                    } else { // Se nenhum filtro pegou, amostra aleatória geral
+                         for(let i = 0; i < Math.min(MAX_SAMPLE_USERS_FOR_AI, allData.length); i++) {
+                             sampleDataForPrompt.push(allData[Math.floor(Math.random() * allData.length)]);
+                        }
+                    }
+                     sampleDataForPrompt = sampleDataForPrompt.map(u => ({ // Mapeia para os campos desejados
+                        DisplayName: u.DisplayName,
+                        OfficeLocation: u.OfficeLocation,
+                        Licenses: (u.Licenses || []).map(l => l.LicenseName)
+                    }));
+
+                    contextNote = `\nAMOSTRA DE DADOS DE USUÁRIOS (POSSIVELMENTE RELEVANTE À PERGUNTA):\nPara ajudar a responder perguntas que podem necessitar de detalhes, segue uma amostra de até ${MAX_SAMPLE_USERS_FOR_AI} usuários (filtrados se possível, ou aleatórios):\n`;
+                }
+                
+                if (sampleDataForPrompt.length > 0) {
+                     promptContext += contextNote + `${JSON.stringify(sampleDataForPrompt, null, 2)}\n`;
+                } else if (!contextNote.includes("não encontrou usuários")) { // Evita duplicar a mensagem se a pré-filtragem já disse que não achou
+                     promptContext += "\nNão foi possível gerar uma amostra de dados de usuário relevante para esta pergunta específica com os filtros automáticos.\n";
+                }
+
+            } else { // Se não for uma pergunta detalhada
+                 promptContext += "\nNenhuma amostra de dados de usuário individual foi incluída neste prompt, apenas estatísticas agregadas.";
+            }
             
         } else {
             $aiResponseArea.text('Não há dados de licença carregados para analisar.');
             return;
         }
 
-        let userQueryForAI = userQuestion || "Com base nas estatísticas de licença fornecidas, quais são os principais insights, possíveis otimizações de custos ou anomalias que você pode identificar?";
+        let userQueryForAI = userQuestion || "Com base nas estatísticas de licença e na amostra de dados (se fornecida), quais são os principais insights, possíveis otimizações de custos ou anomalias que você pode identificar?";
        
-        // === Google Gemini API Configuration ===
-        // Use o modelo mais recente e eficiente, como gemini-1.5-flash-latest
-        // Ou gemini-pro para um modelo mais robusto, se preferir (pode ter custos diferentes no tier pago)
         const GEMINI_MODEL = "gemini-1.5-flash-latest"; 
         const AI_PROVIDER_ENDPOINT_BASE = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-        const finalEndpoint = `${AI_PROVIDER_ENDPOINT_BASE}?key=${apiKey}`; // Chave da API na URL
+        const finalEndpoint = `${AI_PROVIDER_ENDPOINT_BASE}?key=${apiKey}`;
 
         $aiLoadingIndicator.removeClass('hidden');
         $askAiButton.prop('disabled', true);
         $aiResponseArea.html('Analisando com IA (Google Gemini)... <i class="fas fa-spinner fa-spin"></i>');
 
         try {
-            const requestHeaders = {
-                'Content-Type': 'application/json',
-            };
-
-            // O prompt combinado para o Gemini
-            const fullPromptForGemini = `${systemMessage}\n\nContexto dos Dados (Estatísticas Agregadas):\n${promptContext}\n\nPergunta do Usuário/Tarefa: ${userQueryForAI}`;
-
+            const requestHeaders = { 'Content-Type': 'application/json', };
+            const fullPromptForGemini = `${systemMessage}\n\nCONTEXTO DOS DADOS FORNECIDOS (ESTATÍSTICAS E/OU AMOSTRA):\n${promptContext}\n\nPERGUNTA/TAREFA DO USUÁRIO: ${userQueryForAI}`;
             const requestBody = {
-              contents: [{
-                // "role": "user", // Opcional para single-turn, mas bom para clareza
-                parts: [{ "text": fullPromptForGemini }]
-              }],
-              generationConfig: { // Opcional, mas recomendado para controlar a saída
-                "maxOutputTokens": 1024, // Ajuste conforme necessário (limite do Gemini Flash é alto)
-                "temperature": 0.4,      // Menor para respostas mais factuais/consistentes
-                "topP": 0.95,            // Padrão
-                "topK": 40              // Padrão
-              }
+              contents: [{"role": "user", "parts": [{ "text": fullPromptForGemini }]}],
+              generationConfig: { "maxOutputTokens": 1500, "temperature": 0.4, "topP": 0.95, "topK": 40 }
             };
             
-            console.log("Enviando para Google Gemini API:", JSON.stringify(requestBody, null, 2));
-            console.log("Endpoint:", finalEndpoint);
-
+            console.log("Enviando para Google Gemini API (Prompt Completo - Tamanho Aproximado):", fullPromptForGemini.length, "caracteres");
+            // console.log("Objeto de Requisição:", JSON.stringify(requestBody, null, 2));
+            // console.log("Endpoint:", finalEndpoint);
 
             const response = await fetch(finalEndpoint, {
                 method: 'POST',
@@ -826,14 +922,11 @@ $(document).ready(function() {
             
             const responseBodyText = await response.text();
             let data;
-
-            try {
-                data = JSON.parse(responseBodyText);
-            } catch (e) {
+            try { data = JSON.parse(responseBodyText); } 
+            catch (e) {
                 console.error("Falha ao parsear JSON da resposta da API:", responseBodyText);
                 throw new Error(`Resposta da API não é um JSON válido. Status: ${response.status}. Resposta: ${responseBodyText.substring(0, 500)}...`);
             }
-
 
             if (!response.ok) {
                 let detailedMessage = data.error?.message || JSON.stringify(data.error) || responseBodyText;
@@ -844,15 +937,19 @@ $(document).ready(function() {
             console.log("Resposta completa da API Google Gemini:", data);
 
             let aiTextResponse = "Não foi possível extrair uma resposta da IA. Verifique o console.";
-            if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text) {
-               aiTextResponse = data.candidates[0].content.parts.map(part => part.text).join("").trim(); // Concatena todas as partes
-            } else if (data.candidates && data.candidates[0] && data.candidates[0].finishReason) {
-                // Se houver um finishReason mas não houver texto, pode ser um bloqueio de segurança ou outro problema
-                aiTextResponse = `A IA finalizou o processamento com o motivo: ${data.candidates[0].finishReason}.`;
-                if(data.promptFeedback && data.promptFeedback.blockReason) {
-                    aiTextResponse += ` Feedback do prompt: ${data.promptFeedback.blockReason}.`;
+            if (data.candidates && data.candidates[0]) {
+                const candidate = data.candidates[0];
+                if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0 && candidate.content.parts[0].text) {
+                    aiTextResponse = candidate.content.parts.map(part => part.text).join("").trim();
+                } else if (candidate.finishReason && candidate.finishReason !== "STOP") {
+                    aiTextResponse = `A IA finalizou o processamento com o motivo: ${candidate.finishReason}.`;
+                    if(data.promptFeedback && data.promptFeedback.blockReason) {
+                        aiTextResponse += ` Feedback do prompt: ${data.promptFeedback.blockReason}. Verifique se o conteúdo enviado é permitido.`;
+                    } else if (candidate.safetyRatings) {
+                         aiTextResponse += ` Safety Ratings: ${JSON.stringify(candidate.safetyRatings)}`;
+                    }
+                    console.warn("Resposta da IA pode estar bloqueada ou incompleta:", data);
                 }
-                 console.warn("Resposta da IA pode estar bloqueada ou incompleta:", data);
             }
             
             function simpleMarkdownToHtml(mdText) {
@@ -869,7 +966,7 @@ $(document).ready(function() {
                     return '<ul>' + items.map(item => `<li>${item.trim()}</li>`).join('') + '</ul>';
                 });
                 html = html.replace(/<\/ul>\s*<br>\s*<ul>/g, '');
-                html = html.replace(/<\/ul><ul>/g, ''); // Outra variação de junção de listas
+                html = html.replace(/<\/ul><ul>/g, '');
 
                 html = html.replace(/\n/g, '<br>');
                 return html;
