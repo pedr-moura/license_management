@@ -87,7 +87,7 @@ $(document).ready(function() {
     }
 
     function initTable(data) {
-        allData = data; 
+        allData = data;
         if ($('#licenseDatalist').length === 0) { $('body').append('<datalist id="licenseDatalist"></datalist>'); }
         const $licenseDatalist = $('#licenseDatalist').empty();
         if (uniqueFieldValues.Licenses) {
@@ -132,6 +132,8 @@ $(document).ready(function() {
                 if ($('#multiSearchFields .multi-search-row').length > 0) {
                     applyMultiSearch();
                 }
+                 // Inicializa o status do botão da IA
+                updateAiFeatureStatus();
             },
             rowCallback: function(row, data) {
                 let classes = '';
@@ -585,7 +587,7 @@ $(document).ready(function() {
             if (processedData && processedData.length > 0) {
                 showLoader('Rendering table...');
                 setTimeout(() => {
-                    initTable(processedData);
+                    initTable(processedData); // initTable também chamará updateAiFeatureStatus()
                     setupMultiSearch();
                     $('#searchCriteria').text(`Data loaded (${processedData.length} users). Use filters to refine.`);
                 }, 50);
@@ -596,6 +598,7 @@ $(document).ready(function() {
                 if (table) { table.clear().draw(); }
                 $('#multiSearchFields').empty();
                 $('#alertPanel').empty();
+                updateAiFeatureStatus(); // Atualiza status mesmo sem dados
             }
         };
 
@@ -605,6 +608,7 @@ $(document).ready(function() {
             console.error(`Error in Web Worker: Line ${e.lineno} in ${e.filename}: ${e.message}`);
             alert('A critical error occurred during data processing. Please check the console.');
             $('#searchCriteria').text('Critical error loading data.');
+            updateAiFeatureStatus(); // Atualiza status em caso de erro crítico
         };
         worker.postMessage({ rawData: rawData, searchableColumnsConfig: JSON.parse(JSON.stringify(searchableColumnsConfig)) });
     }
@@ -616,9 +620,11 @@ $(document).ready(function() {
                  $('#searchCriteria').text(userData.error || 'JSON data is empty or invalid as provided by PowerShell.');
                  console.error("Error in userData from PowerShell or empty data:", userData);
                  hideLoader();
+                 updateAiFeatureStatus();
             } else if (userData.message && Array.isArray(dataToProcess) && dataToProcess.length === 0) {
                  $('#searchCriteria').text(userData.message);
                  hideLoader();
+                 updateAiFeatureStatus();
             }
             else {
                 processDataWithWorker(dataToProcess);
@@ -626,122 +632,308 @@ $(document).ready(function() {
         } else if (typeof userData !== 'undefined' && userData.message) {
              $('#searchCriteria').text(userData.message);
              hideLoader();
+             updateAiFeatureStatus();
         }
         else {
             console.warn("Global variable 'userData' is not defined as expected or indicates an error state from PowerShell.");
             $('#searchCriteria').html('Failed to load data from PowerShell or data is empty. Check PowerShell script output. <br/> (If running HTML directly, <code>userData</code> is not defined).');
             hideLoader();
+            updateAiFeatureStatus();
         }
     } catch (error) {
         hideLoader();
         alert('Error initiating data loading: ' + error.message);
         console.error("Initial loading error:", error);
         $('#searchCriteria').text('Error loading data.');
+        updateAiFeatureStatus();
     }
 
    // ===========================================================
-    // FUNCIONALIDADE DE IA - (Pré-processamento dinâmico por pergunta)
+    // FUNCIONALIDADE DE IA - (Pré-processamento dinâmico por pergunta e controle de tokens)
     // ===========================================================
-    const AI_API_KEY_STORAGE_KEY = 'licenseAiApiKey_v1_google_prompt_efficient'; // Nova chave para não conflitar
-
+    const AI_API_KEY_STORAGE_KEY = 'licenseAiApiKey_v1_google_prompt_efficient';
     const $manageAiApiKeyButton = $('#manageAiApiKeyButton');
-    // Nenhuma variável para modal HTML, pois ele foi removido
-
     const $askAiButton = $('#askAiButton');
     const $aiQuestionInput = $('#aiQuestionInput');
     const $aiResponseArea = $('#aiResponseArea');
     const $aiLoadingIndicator = $('#aiLoadingIndicator');
+    const $aiTokenInfo = $('#aiTokenInfo'); // Novo elemento para mostrar info de tokens
 
-    let aiConversationHistory = []; // Mantém um histórico curto da sessão atual para contexto de chat
-    const MAX_CONVERSATION_HISTORY_TURNS = 5; // Mantém os últimos 5 pares de pergunta/resposta + system prompt
+    let aiConversationHistory = [];
+    const MAX_CONVERSATION_HISTORY_TURNS = 3; // Reduzido para economizar tokens, manter últimos 3 pares + system
+    const TARGET_MAX_CHARS_FOR_API = 750000; // Alvo de ~750k caracteres (aproximadamente 180k-200k tokens, bem abaixo de 800k)
+                                           // Ajuste conforme necessário. 800k tokens é muito, talvez seja 800k caracteres?
+                                           // Gemini 1.5 Flash tem 1M de tokens de contexto.
+                                           // Um token é ~4 caracteres em inglês. Para português, pode ser um pouco mais.
+                                           // 800.000 tokens * ~3.5 chars/token (PT-BR) = ~2.800.000 caracteres.
+                                           // Vou usar TARGET_MAX_CHARS_FOR_API como um limite prático para o CONTEÚDO gerado.
 
-    // --- Gerenciamento da Chave API da IA via prompt() ---
     function getAiApiKey() {
         return localStorage.getItem(AI_API_KEY_STORAGE_KEY);
     }
 
     function updateAiApiKeyStatusDisplay() {
-        // ... (mesma função updateAiApiKeyStatusDisplay da versão anterior com prompt()) ...
         if (getAiApiKey()) {
             $manageAiApiKeyButton.text('API IA Config.');
             $manageAiApiKeyButton.css('background-color', '#28a745');
-            $manageAiApiKeyButton.attr('title', 'Chave da API da IA (Google Gemini) configurada. Clique para alterar.');
+            $manageAiApiKeyButton.attr('title', 'Chave da API da IA (Google Gemini) configurada. Clique para alterar ou remover.');
         } else {
             $manageAiApiKeyButton.text('Configurar API IA');
-            $manageAiApiKeyButton.css('background-color', '');
+            $manageAiApiKeyButton.css('background-color', ''); // Volta para o estilo padrão
             $manageAiApiKeyButton.attr('title', 'Configurar chave da API da IA (Google Gemini) para análise.');
         }
+        updateAiFeatureStatus(); // Atualiza o botão de perguntar à IA
     }
-   
-    function handleApiKeyInputViaPrompt() {
-        // ... (mesma função handleApiKeyInputViaPrompt da versão anterior) ...
-        const currentKey = getAiApiKey() || "";
-        const newKey = window.prompt("Por favor, insira sua chave de API do Google Gemini (necessária para análise com IA):", currentKey);
 
-        if (newKey === null) {
-            alert("Configuração da chave da API cancelada.");
-            updateAiApiKeyStatusDisplay();
-            return false;
+    function handleApiKeyInputViaPrompt() {
+        const currentKey = getAiApiKey() || "";
+        const newKey = window.prompt("Por favor, insira sua chave de API do Google Gemini:", currentKey);
+
+        if (newKey === null) { // Usuário cancelou
+            // Nenhuma mudança, apenas atualiza a exibição
         } else if (newKey.trim() === "" && currentKey !== "") {
             if (confirm("Você tem certeza que deseja remover a chave da API salva?")) {
                 localStorage.removeItem(AI_API_KEY_STORAGE_KEY);
                 alert("Chave da API removida.");
-                updateAiApiKeyStatusDisplay();
-            } else {
-                 alert("Remoção da chave cancelada. A chave anterior foi mantida.");
             }
-            return false;
         } else if (newKey.trim() !== "") {
             localStorage.setItem(AI_API_KEY_STORAGE_KEY, newKey.trim());
             alert("Chave da API da IA (Google Gemini) salva!");
-            updateAiApiKeyStatusDisplay();
-            return true;
-        } else {
-            alert("Nenhuma chave inserida. A configuração permanece inalterada.");
-            updateAiApiKeyStatusDisplay();
-            return false;
         }
+        updateAiApiKeyStatusDisplay();
+        return getAiApiKey() !== null && getAiApiKey().trim() !== "";
     }
 
     $manageAiApiKeyButton.on('click', function() {
         handleApiKeyInputViaPrompt();
     });
 
-    // Função para extrair palavras-chave de licenças da pergunta do usuário
-    function extractMentionedLicenses(userQuestionLower) {
-        const mentionedLicenses = [];
-        if (uniqueFieldValues.Licenses && userQuestionLower.includes("licença")) { // uniqueFieldValues é preenchido pelo Web Worker
-            uniqueFieldValues.Licenses.forEach(licName => {
-                if (userQuestionLower.includes(licName.toLowerCase())) {
-                    mentionedLicenses.push(licName); // Armazena o nome original da licença
-                }
-            });
-        }
-        return [...new Set(mentionedLicenses)]; // Retorna apenas nomes únicos
+    // Função para estimar tokens (muito simplificada, baseada em caracteres)
+    function estimateChars(text) {
+        return text.length;
     }
-    
-    // Função para extrair palavras-chave de locais/departamentos
-    function extractMentionedLocations(userQuestionLower) {
-        const mentionedLocations = [];
-        if (uniqueFieldValues.OfficeLocation && (userQuestionLower.includes("local") || userQuestionLower.includes("departamento"))) {
-            uniqueFieldValues.OfficeLocation.forEach(locName => {
-                if (userQuestionLower.includes(locName.toLowerCase())) {
-                    mentionedLocations.push(locName);
-                }
-            });
+
+    // Atualiza o estado do botão Ask AI e a informação de tokens
+    async function updateAiFeatureStatus() {
+        const apiKey = getAiApiKey();
+        const hasData = allData && allData.length > 0;
+
+        if (!apiKey || !hasData) {
+            $askAiButton.prop('disabled', true);
+            $askAiButton.attr('title', !apiKey ? 'Configure a chave da API primeiro.' : 'Carregue os dados primeiro.');
+            $aiTokenInfo.text('');
+            return;
         }
-        return [...new Set(mentionedLocations)];
+
+        // Simula a preparação dos dados para verificar o tamanho ANTES de realmente perguntar
+        // Esta é uma verificação leve, a verificação completa ocorre no $askAiButton.on('click')
+        const estimatedContext = await prepareContextForAI("", false); // false = não é para envio real
+        const totalEstimatedChars = estimateChars(estimatedContext.context) +
+                                   estimateChars(JSON.stringify(aiConversationHistory));
+
+        if (totalEstimatedChars > TARGET_MAX_CHARS_FOR_API) {
+            $askAiButton.prop('disabled', true);
+            $askAiButton.attr('title', `Os dados preparados excedem o limite de caracteres (${Math.round(totalEstimatedChars/1000)}k > ${Math.round(TARGET_MAX_CHARS_FOR_API/1000)}k). Tente uma pergunta mais específica ou menos histórico.`);
+            $aiTokenInfo.text(`Info: Dados (${Math.round(totalEstimatedChars/1000)}k chars) podem exceder o limite.`).css('color', 'orange');
+        } else {
+            $askAiButton.prop('disabled', false);
+            $askAiButton.attr('title', 'Perguntar à IA');
+            $aiTokenInfo.text(`Pronto para IA. Dados estimados: ${Math.round(totalEstimatedChars/1000)}k / ${Math.round(TARGET_MAX_CHARS_FOR_API/1000)}k caracteres.`).css('color', '');
+        }
     }
 
 
-    // --- Interação com a IA ---
+    function extractMentionedKeywords(userQuestionLower, availableValues, keywordsToTrigger) {
+        const mentionedItems = [];
+        if (availableValues && keywordsToTrigger.some(kw => userQuestionLower.includes(kw))) {
+            availableValues.forEach(val => {
+                if (userQuestionLower.includes(String(val).toLowerCase())) {
+                    mentionedItems.push(val);
+                }
+            });
+        }
+        return [...new Set(mentionedItems)];
+    }
+
+    async function prepareContextForAI(userQuestion, isActualSendOperation) {
+        const userQuestionLower = userQuestion.toLowerCase();
+        let contextForThisQuestion = "";
+        let sampleDataForPrompt = [];
+        let contextNoteForSample = "";
+
+        // Estimativa de caracteres para o histórico e a pergunta do usuário (aproximado)
+        let currentChars = estimateChars(JSON.stringify(aiConversationHistory)) + estimateChars(userQuestion);
+        const MAX_SAMPLE_USERS_FOR_QUESTION = 10; // Amostra pode ser maior se o resto couber
+        const MAX_CHARS_FOR_USER_SAMPLE = TARGET_MAX_CHARS_FOR_API * 0.3; // 30% do total para amostra de usuários
+        const MAX_CHARS_FOR_AGGREGATES = TARGET_MAX_CHARS_FOR_API * 0.4; // 40% para agregados
+
+        let systemMessage = `Você é um assistente especialista em análise de licenciamento Microsoft 365.
+Sua tarefa é responder à pergunta do usuário com base nos dados fornecidos.
+Os dados podem consistir em:
+1. Estatísticas Agregadas Gerais: Um resumo do uso de licenças.
+2. Amostra Contextual de Dados de Usuários: Se a pergunta for específica, uma amostra de usuários relevantes PODE ser fornecida.
+
+Instruções:
+- Baseie-se ESTRITAMENTE nos dados fornecidos.
+- Se a pergunta exigir dados de nível de usuário que não estão na amostra, INDIQUE CLARAMENTE que você pode responder com base nas estatísticas e na amostra limitada, mas uma análise completa de todos os usuários para aquela pergunta específica não é possível com os dados fornecidos. NÃO invente dados de usuários.
+- Seja conciso. Use Markdown simples. Não inclua saudações/despedidas.`;
+        currentChars += estimateChars(systemMessage);
+
+        if (allData && allData.length > 0) {
+            const totalUsers = allData.length;
+            const licenseMap = new Map();
+            allData.forEach(user => (user.Licenses || []).forEach(lic => licenseMap.set(lic.LicenseName, (licenseMap.get(lic.LicenseName) || 0) + 1)));
+            
+            let aggregatedStats = `Estatísticas Agregadas (Total de ${totalUsers} usuários no dataset):\n`;
+            aggregatedStats += `- Licenças Únicas Distribuídas: ${licenseMap.size}\n`;
+            
+            const topLicensesOverall = [...licenseMap.entries()].sort(([,a],[,b]) => b-a).slice(0,10).map(([n,c])=>`  - ${n}: ${c} usuários`).join('\n');
+            aggregatedStats += `- Top 10 Licenças (Geral):\n${topLicensesOverall}\n`;
+
+            let usersWithMultipleHighValueLicenses = 0;
+            const highValueLicenseKeywords = ['E5', 'Premium', 'Copilot', 'P2', 'Enterprise']; // Adicionado 'Enterprise'
+            const departmentLicenseCounts = {};
+
+            allData.forEach(user => {
+                let highValueLicenseCount = 0;
+                const location = user.OfficeLocation || "Não Especificado";
+                if (!departmentLicenseCounts[location]) { departmentLicenseCounts[location] = { count: 0, licenses: new Map() }; }
+                departmentLicenseCounts[location].count++;
+
+                (user.Licenses || []).forEach(lic => {
+                    const licName = lic.LicenseName;
+                    const currentDeptLicMap = departmentLicenseCounts[location].licenses;
+                    currentDeptLicMap.set(licName, (currentDeptLicMap.get(licName) || 0) + 1);
+                    if (highValueLicenseKeywords.some(keyword => licName.toLowerCase().includes(keyword.toLowerCase()))) {
+                        highValueLicenseCount++;
+                    }
+                });
+                if (highValueLicenseCount > 1) usersWithMultipleHighValueLicenses++;
+            });
+            aggregatedStats += `- Usuários com Múltiplas Licenças de Alto Valor: ${usersWithMultipleHighValueLicenses}\n`;
+
+            let departmentSummary = "\nDistribuição de Licenças por Localização/Departamento (Top 3 locais com mais usuários):\n";
+            const sortedDepartments = Object.entries(departmentLicenseCounts)
+                .map(([dept, data]) => ({ name: dept, userCount: data.count, licMap: data.licenses }))
+                .sort((a,b) => b.userCount - a.userCount).slice(0, 3);
+
+            sortedDepartments.forEach(deptInfo => {
+                departmentSummary += `  Local/Depto: ${deptInfo.name} (${deptInfo.userCount} usuários)\n`;
+                const topDeptLicenses = [...deptInfo.licMap.entries()].sort(([,a],[,b]) => b-a).slice(0,3).map(([name, count]) => `    - ${name}: ${count}`).join('\n');
+                departmentSummary += `${topDeptLicenses}\n`;
+            });
+            aggregatedStats += departmentSummary;
+            
+            // Truncar estatísticas agregadas se necessário
+            if (estimateChars(aggregatedStats) > MAX_CHARS_FOR_AGGREGATES) {
+                aggregatedStats = aggregatedStats.substring(0, MAX_CHARS_FOR_AGGREGATES) + "\n...(estatísticas agregadas truncadas)...";
+            }
+            contextForThisQuestion += aggregatedStats;
+            currentChars += estimateChars(contextForThisQuestion);
+
+            // Lógica para Amostragem Contextual Baseada na Pergunta
+            const detailKeywords = ["quais usuários", "liste usuários", "usuários com", "quem tem", "usuário específico", "detalhes de"];
+            const isDetailedUserQuestion = userQuestion && detailKeywords.some(kw => userQuestionLower.includes(kw));
+
+            if (isDetailedUserQuestion) {
+                let filteredSamplePool = [...allData]; // Começa com todos os dados
+                const mentionedLics = extractMentionedKeywords(userQuestionLower, uniqueFieldValues.Licenses, ["licença", "sku"]);
+                const mentionedLocs = extractMentionedKeywords(userQuestionLower, uniqueFieldValues.OfficeLocation, ["local", "departamento", "escritório"]);
+                const mentionedJobTitles = extractMentionedKeywords(userQuestionLower, uniqueFieldValues.JobTitle, ["cargo", "função"]);
+
+                if (mentionedLics.length > 0) {
+                    filteredSamplePool = filteredSamplePool.filter(u =>
+                        (u.Licenses || []).some(l => mentionedLics.includes(l.LicenseName))
+                    );
+                }
+                if (mentionedLocs.length > 0) {
+                    filteredSamplePool = filteredSamplePool.filter(u =>
+                        mentionedLocs.includes(u.OfficeLocation)
+                    );
+                }
+                if (mentionedJobTitles.length > 0) {
+                     filteredSamplePool = filteredSamplePool.filter(u =>
+                        mentionedJobTitles.includes(u.JobTitle)
+                    );
+                }
+                // Se nenhum filtro específico foi aplicado pela pergunta mas é uma pergunta detalhada,
+                // pegue uma amostra aleatória de todo o dataset como fallback.
+                if (filteredSamplePool.length === allData.length && isDetailedUserQuestion && mentionedLics.length === 0 && mentionedLocs.length === 0 && mentionedJobTitles.length === 0) {
+                    // Amostra aleatória geral se nenhum critério específico foi encontrado
+                     filteredSamplePool = [...allData].sort(() => 0.5 - Math.random());
+                }
+
+
+                if (filteredSamplePool.length > 0) {
+                    let tempSample = [];
+                    let sampleChars = 0;
+                    for (const user of filteredSamplePool) {
+                        if (tempSample.length >= MAX_SAMPLE_USERS_FOR_QUESTION) break;
+                        const userSample = {
+                            DisplayName: user.DisplayName,
+                            OfficeLocation: user.OfficeLocation,
+                            JobTitle: user.JobTitle,
+                            Licenses: (user.Licenses || []).map(l => l.LicenseName)
+                        };
+                        const userSampleStr = JSON.stringify(userSample);
+                        if (currentChars + sampleChars + estimateChars(userSampleStr) < TARGET_MAX_CHARS_FOR_API && sampleChars + estimateChars(userSampleStr) < MAX_CHARS_FOR_USER_SAMPLE) {
+                            tempSample.push(userSample);
+                            sampleChars += estimateChars(userSampleStr);
+                        } else {
+                            break; // Para de adicionar se exceder o limite de caracteres para amostra ou total
+                        }
+                    }
+                    sampleDataForPrompt = tempSample;
+                }
+
+                if (sampleDataForPrompt.length > 0) {
+                    contextNoteForSample = `\nAmostra Contextual de Usuários (${sampleDataForPrompt.length} usuário(s) relevantes para a pergunta):\n${JSON.stringify(sampleDataForPrompt, null, 2)}\n`;
+                } else {
+                    contextNoteForSample = "\nNão foi possível gerar uma amostra de usuários relevante para os detalhes específicos da pergunta dentro dos limites de dados, ou nenhum usuário correspondeu. A resposta será baseada principalmente nas estatísticas agregadas.\n";
+                }
+                // Adiciona nota da amostra apenas se houver espaço
+                if (currentChars + estimateChars(contextNoteForSample) < TARGET_MAX_CHARS_FOR_API) {
+                    contextForThisQuestion += contextNoteForSample;
+                    currentChars += estimateChars(contextNoteForSample);
+                } else {
+                     contextForThisQuestion += "\n...(nota sobre amostra de usuários omitida por limite de dados)...";
+                }
+            } else {
+                const generalNote = "\nNenhuma amostra detalhada de usuário foi incluída para esta pergunta geral. Responda com base nas estatísticas agregadas.\n";
+                 if (currentChars + estimateChars(generalNote) < TARGET_MAX_CHARS_FOR_API){
+                    contextForThisQuestion += generalNote;
+                    currentChars += estimateChars(generalNote);
+                 }
+            }
+        } else {
+            contextForThisQuestion = 'Não há dados de licença carregados para analisar.';
+            if (isActualSendOperation) { // Só mostra alerta se for um envio real
+                 $aiResponseArea.text(contextForThisQuestion);
+            }
+            return { context: contextForThisQuestion, systemMessage: systemMessage, history: aiConversationHistory, canSend: false };
+        }
+        
+        const canSendData = currentChars < TARGET_MAX_CHARS_FOR_API;
+        if (isActualSendOperation) {
+            $aiTokenInfo.text(`Enviando: ~${Math.round(currentChars/1000)}k / ${Math.round(TARGET_MAX_CHARS_FOR_API/1000)}k caracteres.`).css('color', canSendData ? 'green' : 'red');
+        }
+
+        return {
+            context: contextForThisQuestion,
+            systemMessage: systemMessage,
+            history: aiConversationHistory,
+            canSend: canSendData
+        };
+    }
+
+
     $askAiButton.on('click', async function() {
         let apiKey = getAiApiKey();
         if (!apiKey) {
             alert('Por favor, configure sua chave de API do Google Gemini clicando em "Configurar API IA".');
-            if (!handleApiKeyInputViaPrompt()) return; 
-            apiKey = getAiApiKey(); 
-            if (!apiKey) return; 
+            if (!handleApiKeyInputViaPrompt()) return;
+            apiKey = getAiApiKey();
+            if (!apiKey) return;
         }
 
         const userQuestion = $aiQuestionInput.val().trim();
@@ -750,142 +942,52 @@ $(document).ready(function() {
             return;
         }
 
-        const userQuestionLower = userQuestion.toLowerCase();
-        let contextForThisQuestion = "";
-        const MAX_SAMPLE_USERS_FOR_QUESTION = 5; // Amostra pequena e direcionada por pergunta
-
-        let systemMessage = `Você é um assistente especialista em análise de licenciamento Microsoft 365.
-Sua tarefa é responder à pergunta do usuário com base nos dados fornecidos.
-Os dados consistem em:
-1.  Estatísticas Agregadas Gerais: Um resumo do uso de licenças em toda a base.
-2.  Amostra Contextual de Dados de Usuários (Opcional e Pequena): Se a pergunta do usuário for específica, uma pequena amostra de até ${MAX_SAMPLE_USERS_FOR_QUESTION} usuários relevantes (com DisplayName, OfficeLocation, JobTitle, e LicenseNames) PODE ser fornecida.
-
-Instruções para responder:
-- Use as Estatísticas Agregadas para responder a perguntas gerais ou de alto nível.
-- Se uma Amostra Contextual de Usuários for fornecida, use-a DIRETAMENTE para responder à pergunta específica.
-- Se a pergunta exigir dados de nível de usuário para todos os ${allData.length} usuários (o que não é fornecido na íntegra), e a amostra (se houver) não for suficiente ou não for fornecida, INDIQUE CLARAMENTE que você pode responder com base nas estatísticas e na amostra limitada, mas que uma análise completa de todos os usuários para aquela pergunta específica não é possível com os dados fornecidos neste prompt. NÃO invente dados de usuários não presentes na amostra.
-- Seja conciso e foque em observações acionáveis. Use formatação Markdown simples. Não inclua saudações/despedidas.`;
-
-        if (allData && allData.length > 0) {
-            const totalUsers = allData.length;
-            const licenseMap = new Map();
-            allData.forEach(user => (user.Licenses || []).forEach(lic => licenseMap.set(lic.LicenseName, (licenseMap.get(lic.LicenseName) || 0) + 1)));
-            const uniqueLicenseCount = licenseMap.size;
-            const topLicensesOverall = [...licenseMap.entries()].sort(([,a],[,b]) => b-a).slice(0,10).map(([n,c])=>`  - ${n}: ${c}`).join('\n');
-            // ... (cálculo de mais estatísticas como usersWithMultipleHighValueLicenses, departmentSummary da versão anterior)
-            let usersWithMultipleHighValueLicenses = 0;
-            const highValueLicenseKeywords = ['E5', 'Premium', 'Copilot', 'P2'];
-            const departmentLicenseCounts = {};
-            allData.forEach(user => {
-                let highValueLicenseCount = 0;
-                const location = user.OfficeLocation || "Não Especificado";
-                if (!departmentLicenseCounts[location]) { departmentLicenseCounts[location] = new Map(); }
-                (user.Licenses || []).forEach(lic => {
-                    const licName = lic.LicenseName;
-                    const currentDeptLicMap = departmentLicenseCounts[location];
-                    currentDeptLicMap.set(licName, (currentDeptLicMap.get(licName) || 0) + 1);
-                    if (highValueLicenseKeywords.some(keyword => licName.toLowerCase().includes(keyword.toLowerCase()))) {
-                        highValueLicenseCount++;
-                    }
-                });
-                if (highValueLicenseCount > 1) usersWithMultipleHighValueLicenses++;
-            });
-            let departmentSummary = "\nDistribuição de Licenças por Localização/Departamento (Top 3 locais com mais usuários):\n";
-            const sortedDepartments = Object.entries(departmentLicenseCounts).map(([dept, licMap]) => ({ name: dept, userCount: new Set(allData.filter(u => (u.OfficeLocation || "Não Especificado") === dept).map(u => u.Id)).size, licMap: licMap })).sort((a,b) => b.userCount - a.userCount).slice(0, 3);
-            sortedDepartments.forEach(deptInfo => {
-                departmentSummary += `  Local/Depto: ${deptInfo.name} (${deptInfo.userCount} usuários)\n`;
-                const topDeptLicenses = [...deptInfo.licMap.entries()].sort(([,a],[,b]) => b-a).slice(0,3).map(([name, count]) => `    - ${name}: ${count}`).join('\n');
-                departmentSummary += `${topDeptLicenses}\n`;
-            });
-            
-            contextForThisQuestion = `Estatísticas Agregadas (Total de ${totalUsers} usuários no dataset):\n- Licenças Únicas: ${uniqueLicenseCount}\n- Usuários com Múltiplas Licenças de Alto Valor: ${usersWithMultipleHighValueLicenses}\n- Top 10 Licenças (Geral):\n${topLicensesOverall}\n${departmentSummary}\n---\n`;
-            
-            // Lógica para Amostragem Contextual Baseada na Pergunta
-            let sampleDataForPrompt = [];
-            let contextNoteForSample = "";
-            const detailKeywords = ["quais usuários", "liste usuários", "usuários com", "quem tem", "usuário específico"];
-            const isDetailedUserQuestion = userQuestion && detailKeywords.some(kw => userQuestionLower.includes(kw));
-
-            if (isDetailedUserQuestion) {
-                let filteredSamplePool = [...allData];
-                const mentionedLics = extractMentionedLicenses(userQuestionLower);
-                const mentionedLocs = extractMentionedLocations(userQuestionLower);
-
-                if (mentionedLics.length > 0) {
-                    filteredSamplePool = filteredSamplePool.filter(u => 
-                        (u.Licenses || []).some(l => mentionedLics.includes(l.LicenseName))
-                    );
-                }
-                if (mentionedLocs.length > 0) {
-                    filteredSamplePool = filteredSamplePool.filter(u => 
-                        mentionedLocs.includes(u.OfficeLocation)
-                    );
-                }
-                // Adicionar mais filtros se necessário (ex: JobTitle)
-
-                if (filteredSamplePool.length > 0) {
-                    // Pega uma amostra aleatória do pool filtrado
-                    for(let i = 0; i < Math.min(MAX_SAMPLE_USERS_FOR_QUESTION, filteredSamplePool.length); i++) {
-                        sampleDataForPrompt.push(filteredSamplePool[Math.floor(Math.random() * filteredSamplePool.length)]);
-                    }
-                    // Remove duplicatas se a amostragem aleatória pegar o mesmo usuário mais de uma vez
-                    sampleDataForPrompt = [...new Set(sampleDataForPrompt.map(u => u.Id))].map(id => filteredSamplePool.find(u => u.Id === id));
-                     sampleDataForPrompt = sampleDataForPrompt.slice(0, MAX_SAMPLE_USERS_FOR_QUESTION); // Garante o limite
-                }
-                
-                if (sampleDataForPrompt.length > 0) {
-                    const sampleToSend = sampleDataForPrompt.map(u => ({
-                        DisplayName: u.DisplayName,
-                        OfficeLocation: u.OfficeLocation,
-                        JobTitle: u.JobTitle,
-                        Licenses: (u.Licenses || []).map(l => l.LicenseName)
-                    }));
-                    contextNoteForSample = `\nAmostra Contextual de Usuários ( ${sampleDataForPrompt.length} usuário(s) relevantes para a pergunta ):\n${JSON.stringify(sampleToSend, null, 2)}\n`;
-                } else {
-                    contextNoteForSample = "\nNão foi encontrada uma amostra de usuários diretamente relevante para os detalhes específicos da pergunta. A resposta será baseada principalmente nas estatísticas agregadas.\n";
-                }
-                contextForThisQuestion += contextNoteForSample;
-            } else {
-                 contextForThisQuestion += "\nNenhuma amostra detalhada de usuário foi incluída para esta pergunta geral. Responda com base nas estatísticas.\n";
-            }
-            
-        } else {
+        if (!allData || allData.length === 0) {
             $aiResponseArea.text('Não há dados de licença carregados para analisar.');
             return;
         }
-       
-        const GEMINI_MODEL_TO_USE = "gemini-1.5-flash-latest"; 
-        const AI_PROVIDER_ENDPOINT_BASE = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_TO_USE}:generateContent`;
-        const finalEndpoint = `${AI_PROVIDER_ENDPOINT_BASE}?key=${apiKey}`;
 
         $aiLoadingIndicator.removeClass('hidden');
         $askAiButton.prop('disabled', true);
-        $aiResponseArea.html(`Analisando com IA (Google Gemini)... <i class="fas fa-spinner fa-spin"></i>`);
+        $aiResponseArea.html(`Preparando dados e analisando com IA (Google Gemini)... <i class="fas fa-spinner fa-spin"></i>`);
+
+        const preparedPayload = await prepareContextForAI(userQuestion, true); // true = para envio real
+
+        if (!preparedPayload.canSend) {
+            $aiResponseArea.text('Os dados a serem enviados para a IA excedem o limite de tamanho configurado. Por favor, tente uma pergunta mais específica, reduza o histórico de chat (se aplicável limpando a página e começando uma nova conversa) ou revise os filtros de dados.');
+            $aiLoadingIndicator.addClass('hidden');
+            $askAiButton.prop('disabled', false); // Reabilita para tentar de novo
+            updateAiFeatureStatus(); // Atualiza o status e o botão
+            return;
+        }
+
+        const GEMINI_MODEL_TO_USE = "gemini-1.5-flash-latest";
+        const AI_PROVIDER_ENDPOINT_BASE = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_TO_USE}:generateContent`;
+        const finalEndpoint = `${AI_PROVIDER_ENDPOINT_BASE}?key=${apiKey}`;
 
         try {
             const requestHeaders = { 'Content-Type': 'application/json', };
             
-            // Construir o payload para Gemini, incluindo o histórico curto da sessão atual
-            // O systemMessage é enviado implicitamente como parte do primeiro "user" turn no histórico.
-            let currentConversationTurn = { "role": "user", "parts": [{ "text": `${contextForThisQuestion}\n\nPERGUNTA DO USUÁRIO: ${userQuestion}` }] };
-            
-            // Adiciona o system prompt ao início do histórico se for a primeira pergunta da sessão de chat
-            if (aiConversationHistory.length === 0) {
-                aiConversationHistory.push({ "role": "user", "parts": [{ "text": systemMessage }] }); // System prompt como user
-                aiConversationHistory.push({ "role": "model", "parts": [{ "text": "Entendido. Estou pronto para ajudar com a análise de licenciamento."}] }); // Simula uma resposta inicial da IA
+            let conversationTurnsForAPI = [];
+            if (aiConversationHistory.length === 0) { // Primeira pergunta da sessão de chat
+                conversationTurnsForAPI.push({ "role": "user", "parts": [{ "text": preparedPayload.systemMessage }] });
+                conversationTurnsForAPI.push({ "role": "model", "parts": [{ "text": "Entendido. Estou pronto para ajudar com a análise de licenciamento, respeitando os dados fornecidos."}] });
+            } else {
+                conversationTurnsForAPI = [...aiConversationHistory];
             }
-
-            let historyToSend = [...aiConversationHistory];
-            historyToSend.push(currentConversationTurn);
+            
+            const userTurn = { "role": "user", "parts": [{ "text": `${preparedPayload.context}\n\nPERGUNTA DO USUÁRIO: ${userQuestion}` }] };
+            conversationTurnsForAPI.push(userTurn);
             
             const requestBody = {
-              contents: historyToSend,
-              generationConfig: { "maxOutputTokens": 2048, "temperature": 0.4 }
+              contents: conversationTurnsForAPI,
+              generationConfig: { "maxOutputTokens": 2048, "temperature": 0.4 } // Max output pode ser ajustado
             };
 
-            console.log(`Enviando para Google Gemini. Turnos no histórico (antes da pergunta atual): ${aiConversationHistory.length}`);
-            console.log(`Contexto enviado para esta pergunta (aprox.): ${contextForThisQuestion.length} caracteres.`);
-            // console.log("Corpo da Requisição:", JSON.stringify(requestBody, null, 2));
+            // console.log(`Enviando para Google Gemini. Turnos no histórico (incluindo system prompt implícito): ${conversationTurnsForAPI.length}`);
+            // console.log("Corpo da Requisição (semelhante):", JSON.stringify(requestBody.contents.map(c => ({role: c.role, textLength: c.parts[0].text.length})), null, 2));
+            // console.log("Contexto enviado para esta pergunta (aprox.):", preparedPayload.context.length, "caracteres.");
+
 
             const response = await fetch(finalEndpoint, {
                 method: 'POST',
@@ -895,46 +997,103 @@ Instruções para responder:
             
             const responseBodyText = await response.text();
             let data;
-            try { data = JSON.parse(responseBodyText); } 
-            catch (e) { /* ... (tratamento de erro de parse como antes) ... */ }
+            try { data = JSON.parse(responseBodyText); }
+            catch (e) {
+                console.error("Erro ao fazer parse da resposta JSON da IA:", e);
+                console.error("Resposta recebida (texto):", responseBodyText);
+                $aiResponseArea.text(`Erro ao processar resposta da IA. Detalhes no console. Status: ${response.status}`);
+                throw new Error(`JSON Parse Error: ${e.message}. Response Status: ${response.status}.`);
+            }
 
-            if (!response.ok) { /* ... (tratamento de erro da API como antes) ... */ }
+            if (!response.ok) {
+                console.error("Erro da API Google Gemini:", data);
+                let errorMsg = `Erro da API da IA: ${response.status}. `;
+                if (data && data.error && data.error.message) {
+                    errorMsg += data.error.message;
+                } else {
+                    errorMsg += "Detalhes não disponíveis.";
+                }
+                $aiResponseArea.text(errorMsg);
+                throw new Error(errorMsg);
+            }
 
-            console.log("Resposta da API Google Gemini:", data);
+            // console.log("Resposta da API Google Gemini:", data);
 
-            let aiTextResponse = "Não foi possível extrair a resposta da IA.";
-            // ... (lógica de extração da resposta do Gemini como antes) ...
+            let aiTextResponse = "Não foi possível extrair a resposta da IA ou a resposta estava vazia.";
              if (data.candidates && data.candidates[0]) {
                 const candidate = data.candidates[0];
                 if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0 && candidate.content.parts[0].text) {
                     aiTextResponse = candidate.content.parts.map(part => part.text).join("").trim();
-                } else if (candidate.finishReason && candidate.finishReason !== "STOP") { /* ... */ }
-                else if (candidate.finishReason === "STOP" && (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0 || !candidate.content.parts[0].text)) { /* ... */ }
+                } else if (candidate.finishReason && candidate.finishReason !== "STOP") {
+                    aiTextResponse = `A IA parou de gerar a resposta devido a: ${candidate.finishReason}.`;
+                    if (candidate.safetyRatings) {
+                         aiTextResponse += ` Avaliações de segurança: ${JSON.stringify(candidate.safetyRatings)}`;
+                    }
+                }
             }
             
-            // Adicionar pergunta atual e resposta da IA ao histórico
-            aiConversationHistory.push(currentConversationTurn); // Adiciona o turno do usuário que acabou de ser enviado
-            aiConversationHistory.push({ "role": "model", "parts": [{ "text": aiTextResponse }] }); // Adiciona resposta da IA
+            // Adicionar pergunta atual (com contexto) e resposta da IA ao histórico
+            // Adiciona o turno do usuário que acabou de ser enviado
+            aiConversationHistory.push(userTurn);
+            // Adiciona resposta da IA
+            aiConversationHistory.push({ "role": "model", "parts": [{ "text": aiTextResponse }] });
 
             // Truncar histórico para manter os últimos N turnos (1 turno = 1 user + 1 model)
-            if (aiConversationHistory.length > (MAX_CONVERSATION_HISTORY_TURNS * 2)) {
-                // Mantém o system prompt (primeiro user e primeiro model) + os últimos N-1 pares
-                const itemsToKeepFromEnd = (MAX_CONVERSATION_HISTORY_TURNS -1) * 2;
-                const firstTwoItems = aiConversationHistory.slice(0,2);
-                const lastItems = aiConversationHistory.slice(-itemsToKeepFromEnd);
-                aiConversationHistory = [...firstTwoItems, ...lastItems];
-                console.log(`Histórico truncado. Mantendo ${aiConversationHistory.length} itens.`);
+            // +2 para o system prompt inicial e resposta da IA simulada
+            const maxHistoryItems = (MAX_CONVERSATION_HISTORY_TURNS * 2) + (aiConversationHistory.find(turn => turn.parts[0].text.startsWith("Você é um assistente especialista")) ? 2 : 0);
+            if (aiConversationHistory.length > maxHistoryItems) {
+                 // Se o system prompt original estiver lá, preserva-o e a primeira resposta do modelo.
+                if (aiConversationHistory[0].parts[0].text.startsWith("Você é um assistente especialista")) {
+                    const systemPromptAndFirstModelResponse = aiConversationHistory.slice(0, 2);
+                    const recentTurns = aiConversationHistory.slice(-( (MAX_CONVERSATION_HISTORY_TURNS -1) * 2 )); // -1 porque já temos um par (system)
+                    aiConversationHistory = [...systemPromptAndFirstModelResponse, ...recentTurns];
+                } else { // Caso contrário, apenas pega os últimos N pares.
+                    aiConversationHistory = aiConversationHistory.slice(-(MAX_CONVERSATION_HISTORY_TURNS * 2));
+                }
+                // console.log(`Histórico truncado. Mantendo ${aiConversationHistory.length} itens.`);
             }
             
-            $aiQuestionInput.val(''); 
-            function simpleMarkdownToHtml(mdText) { /* ... (função como antes) ... */ }
+            $aiQuestionInput.val('');
+            function simpleMarkdownToHtml(mdText) {
+                if (typeof mdText !== 'string') return '';
+                // Negrito: **texto** ou __texto__
+                mdText = mdText.replace(/\*\*(.*?)\*\*|__(.*?)__/g, '<strong>$1$2</strong>');
+                // Itálico: *texto* ou _texto_
+                mdText = mdText.replace(/\*(.*?)\*|_(.*?)_/g, '<em>$1$2</em>');
+                // Listas não ordenadas: - item ou * item
+                mdText = mdText.replace(/^(\s*)- (.*)/gm, '$1<li>$2</li>');
+                mdText = mdText.replace(/^(\s*)\* (.*)/gm, '$1<li>$2</li>');
+                mdText = mdText.replace(/(\<\/li\>\n)+<li>/g, '</li><li>'); // Agrupa <li> adjacentes
+                mdText = mdText.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+                mdText = mdText.replace(/<\/ul>\s*<ul>/gs, ''); // Remove <ul> aninhados desnecessariamente
+
+                // Títulos (simples): # Título, ## Título
+                mdText = mdText.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+                mdText = mdText.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+                mdText = mdText.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+                // Quebras de linha
+                mdText = mdText.replace(/\n/g, '<br>');
+                // Remover <br> dentro de <ul> e antes/depois de <li> (efeito colateral da conversão de lista)
+                mdText = mdText.replace(/<ul><br>/g, '<ul>').replace(/<br><\/ul>/g, '</ul>');
+                mdText = mdText.replace(/<li><br>/g, '<li>').replace(/<br><\/li>/g, '</li>');
+                return mdText;
+            }
             $aiResponseArea.html(simpleMarkdownToHtml(aiTextResponse));
 
-        } catch (error) { /* ... (tratamento de erro como antes) ... */ }
-        finally { /* ... (loading indicator e botão como antes) ... */ }
+        } catch (error) {
+            console.error("Erro na interação com a IA:", error);
+            if (!$aiResponseArea.text().startsWith("Erro da API da IA:") && !$aiResponseArea.text().startsWith("Erro ao processar resposta da IA.")) {
+                 $aiResponseArea.text('Ocorreu um erro ao tentar comunicar com a IA. Verifique o console para mais detalhes.');
+            }
+        }
+        finally {
+            $aiLoadingIndicator.addClass('hidden');
+            $askAiButton.prop('disabled', false); // Reabilita mesmo em erro para nova tentativa
+            updateAiFeatureStatus(); // Atualiza o status e o botão
+        }
     });
    
-    updateAiApiKeyStatusDisplay();
+    updateAiApiKeyStatusDisplay(); // Chamada inicial para configurar o botão da API
     // ===========================================================
     // FUNCIONALIDADE DE IA - FIM
     // ===========================================================
