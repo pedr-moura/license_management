@@ -50,19 +50,19 @@
    border-bottom: 1px solid #4a5568;
    display: flex;
    align-items: center;
-   justify-content: space-between; /* Mantido para caso haja mais itens no header */
+   justify-content: space-between;
   }
   header h1 {
    font-size: 1.5rem;
    font-weight: 600;
    color: #ffffff;
-   margin-right: auto; /* Empurra o botão da IA para a direita */
+   margin-right: auto;
   }
   main {
    flex: 1;
    padding: 2rem;
    overflow-y: auto;
-   width: 90dvw; /* Ajustado para evitar estouro horizontal excessivo */
+   width: 90dvw;
   }
   .section-spacing {
    margin-bottom: 2rem;
@@ -142,7 +142,6 @@
    margin-left: 0.5rem;
   }
   .button {
-   /* width: 100%; Removido para permitir botões de largura automática */
    padding: 0.75rem 1rem;
    border-radius: 6px;
    color: #ffffff;
@@ -151,7 +150,7 @@
    border: none;
    cursor: pointer;
    transition: background-color 0.2s ease;
-   display: inline-flex; /* Mudado para inline-flex para largura automática */
+   display: inline-flex;
    align-items: center;
    justify-content: center;
    gap: 0.5rem;
@@ -177,14 +176,13 @@
   .button-red:hover {
    background-color: #dc2626;
   }
-  /* Estilos da Tabela */
   .table-container {
    width: 100%;
    border-collapse: collapse;
    font-size: 0.875rem;
    background-color: #2d3748;
    border-radius: 8px;
-   overflow: hidden; /* Garante que o border-radius seja aplicado às bordas da tabela */
+   overflow: hidden;
   }
   th, td {
    padding: 0.75rem 1rem;
@@ -193,7 +191,7 @@
    color: #cbd5e0;
   }
   th {
-   background-color: #2d3748; /* Cor de fundo consistente com .card */
+   background-color: #2d3748;
    font-weight: 600;
    color: #e2e8f0;
   }
@@ -202,12 +200,11 @@
    transition: background-color 0.15s ease;
   }
   tbody tr:nth-child(even) {
-   background-color: #262f40; /* Um pouco mais escuro para zebrar */
+   background-color: #262f40;
   }
   tbody tr:hover {
    background-color: #4a5568;
   }
-  /* Inputs de busca no cabeçalho e outros inputs */
   .search-input, input[type="password"], textarea {
    width: 100%;
    padding: 0.5rem;
@@ -217,7 +214,7 @@
    background-color: #1a202c;
    color: #e2e8f0;
    transition: border-color 0.2s ease, background-color 0.2s ease;
-   box-sizing: border-box; /* Para que padding não aumente a largura total */
+   box-sizing: border-box;
   }
   .search-input:focus, input[type="password"]:focus, textarea:focus {
    border-color: #3b82f6;
@@ -228,10 +225,8 @@
    color: #718096;
   }
   textarea {
-      resize: vertical; /* Permite redimensionamento vertical */
+      resize: vertical;
   }
-
-  /* Estilos para Controles do DataTables */
   .dataTables_wrapper {
    color: #a0aec0;
    margin-top: 1rem;
@@ -264,13 +259,13 @@
    border: 1px solid #4a5568;
    padding: 0.35rem 0.5rem;
    border-radius: 4px;
-   width: 200px; /* Ajuste conforme necessário */
+   width: 200px;
    margin-left: 0.5rem;
   }
   .dataTables_info {
    font-size: 0.875rem;
    color: #a0aec0;
-   padding-top: 0.5rem; /* Ajuste para alinhamento com paginação */
+   padding-top: 0.5rem;
   }
   .dataTables_paginate {
    margin-top: 1rem;
@@ -279,7 +274,7 @@
    gap: 0.25rem;
   }
   .dataTables_paginate .paginate_button {
-   color: #a0aec0 !important; /* Força a cor do texto */
+   color: #a0aec0 !important;
    border: 1px solid #4a5568;
    background: #2d3748;
    padding: 0.4rem 0.8rem;
@@ -287,28 +282,26 @@
    cursor: pointer;
    font-size: 0.875rem;
    transition: background-color 0.2s ease, border-color 0.2s ease;
-   text-decoration: none; /* Remove sublinhado de links */
+   text-decoration: none;
   }
   .dataTables_paginate .paginate_button:hover {
    background: #4a5568;
    border-color: #5a667a;
-   color: #ffffff !important; /* Cor do texto no hover */
+   color: #ffffff !important;
   }
   .dataTables_paginate .paginate_button.current,
   .dataTables_paginate .paginate_button.current:hover {
    background: #3b82f6;
    border-color: #3b82f6;
-   color: #ffffff !important; /* Cor do texto no botão atual */
+   color: #ffffff !important;
   }
   .dataTables_paginate .paginate_button.disabled,
   .dataTables_paginate .paginate_button.disabled:hover {
    background: #2d3748;
    border-color: #4a5568;
-   color: #718096 !important; /* Cor do texto desabilitado */
+   color: #718096 !important;
    cursor: not-allowed;
-   /* cursor: default;  Cursor padrão para desabilitado - not-allowed é mais claro */
   }
-  /* Estilos para Pesquisa Avançada */
   .multi-search-row {
    display: flex;
    gap: 0.75rem;
@@ -316,10 +309,10 @@
    align-items: center;
   }
   .multi-search-row .column-select {
-   flex: 0 0 150px; /* Largura fixa para o select de coluna */
+   flex: 0 0 150px;
   }
-  .multi-search-row .search-input { /* Mantido para quando o dropdown não é usado */
-   flex-grow: 1; /* Campo de busca ocupa o espaço restante */
+  .multi-search-row .search-input {
+   flex-grow: 1;
   }
   .multi-search-row .remove-field {
    padding: 0.5rem 0.75rem;
@@ -329,12 +322,12 @@
    border-radius: 6px;
    cursor: pointer;
    transition: background-color 0.2s ease;
-   flex-shrink: 0; /* Não encolhe */
-   font-size: 1rem; /* Ajuste para o ícone parecer de tamanho adequado */
-   line-height: 1; /* Para alinhar melhor o ícone verticalmente */
+   flex-shrink: 0;
+   font-size: 1rem;
+   line-height: 1;
   }
   .multi-search-row .remove-field:hover {
-   background-color: #ef4444; /* Vermelho para indicar remoção */
+   background-color: #ef4444;
    color: #ffffff;
   }
   #searchCriteria {
@@ -345,7 +338,7 @@
    background-color: #222938;
    border-radius: 4px;
    border: 1px solid #4a5568;
-   min-height: 1.5em; /* Para que não colapse quando vazio */
+   min-height: 1.5em;
   }
   .multi-search-header {
    display: flex;
@@ -368,33 +361,31 @@
    color: #a0aec0;
   }
   .multi-search-controls #multiSearchOperator {
-   width: auto; /* Ajusta a largura ao conteúdo */
-   padding: 0.5rem 2em 0.5rem 0.75rem; /* Espaço para a seta */
+   width: auto;
+   padding: 0.5rem 2em 0.5rem 0.75rem;
   }
   .multi-search-controls #addSearchField {
-   padding: 0.5rem 1rem; /* Padding padrão de botão */
-   width: auto; /* Ajusta a largura ao conteúdo */
+   padding: 0.5rem 1rem;
+   width: auto;
    gap: 0.3rem;
   }
   .multi-search-controls #addSearchField i {
-   font-size: 0.8em; /* Ícone um pouco menor */
+   font-size: 0.8em;
   }
-  /* Estilos para Linhas Destacadas */
   .conflict {
-   background-color: rgba(234, 179, 8, 0.10) !important; /* Amarelo com transparência */
-   border-left: 3px solid #D97706; /* Amarelo mais forte para a borda */
+   background-color: rgba(234, 179, 8, 0.10) !important;
+   border-left: 3px solid #D97706;
   }
   .conflict td {
-   color: #FCD34D !important; /* Texto amarelo claro para contraste */
+   color: #FCD34D !important;
   }
   .dup-license {
-   background-color: rgba(220, 38, 38, 0.10) !important; /* Vermelho com transparência */
-   border-left: 3px solid #B91C1C; /* Vermelho mais forte para a borda */
+   background-color: rgba(220, 38, 38, 0.10) !important;
+   border-left: 3px solid #B91C1C;
   }
   .dup-license td {
-   color: #FECACA !important; /* Texto vermelho claro para contraste */
+   color: #FECACA !important;
   }
-  /* Estilos para Alertas */
   .alert-badge {
    padding: 0.75rem 1rem;
    border-radius: 6px;
@@ -402,13 +393,13 @@
    display: flex;
    justify-content: space-between;
    align-items: center;
-   margin-bottom: 0.5rem; /* Espaço entre badges */
-   background-color: rgba(239, 68, 68, 0.1); /* Fundo vermelho claro */
-   color: #f87171; /* Texto vermelho */
-   border: 1px solid rgba(239, 68, 68, 0.3); /* Borda sutil */
+   margin-bottom: 0.5rem;
+   background-color: rgba(239, 68, 68, 0.1);
+   color: #f87171;
+   border: 1px solid rgba(239, 68, 68, 0.3);
   }
   .alert-badge button.underline {
-   color: #fca5a5; /* Cor do link no alerta */
+   color: #fca5a5;
    text-decoration-color: #fca5a5;
   }
   .alert-badge button.underline:hover {
@@ -416,26 +407,25 @@
    text-decoration-color: #ffffff;
   }
   .alert-details {
-   display: none; /* Oculto por padrão */
+   display: none;
    margin-top: 0.75rem;
    padding: 0.75rem 1rem;
    font-size: 0.875rem;
    color: #a0aec0;
-   background-color: #1a202c; /* Fundo mais escuro para detalhes */
+   background-color: #1a202c;
    border-radius: 4px;
    border: 1px solid #4a5568;
   }
   .alert-details.show {
-   display: block; /* Mostra quando a classe 'show' é adicionada */
+   display: block;
   }
   .alert-details ul {
-   padding-left: 1.25rem; /* Indentação para a lista */
-   list-style-type: disc; /* Marcadores de lista */
+   padding-left: 1.25rem;
+   list-style-type: disc;
   }
   .alert-details li {
-   margin-bottom: 0.25rem; /* Espaçamento entre itens da lista */
+   margin-bottom: 0.25rem;
   }
-  /* Estilo para Selects Genéricos e de Licença */
   select, .license-select {
    -webkit-appearance: none;
    -moz-appearance: none;
@@ -444,68 +434,66 @@
    background-repeat: no-repeat;
    background-position: right 0.7em top 50%;
    background-size: 0.65em auto;
-   padding-right: 2.5em; /* Espaço para a seta */
+   padding-right: 2.5em;
    background-color: #1a202c;
    color: #e2e8f0;
    border: 1px solid #4a5568;
-   border-radius: 4px; /* Consistente com outros inputs */
-   height: 33px; /* Altura padrão */
-   min-width: 60px; /* Largura mínima */
-   padding-left: 10px; /* Padding esquerdo */
-   padding-top: 0; /* Ajustes de padding para alinhar texto */
+   border-radius: 4px;
+   height: 33px;
+   min-width: 60px;
+   padding-left: 10px;
+   padding-top: 0;
    padding-bottom: 0;
   }
   select:focus, .license-select:focus {
-   border-color: #3b82f6; /* Destaque no foco */
+   border-color: #3b82f6;
    outline: none;
-   background-color: #222938; /* Fundo um pouco mais claro no foco */
+   background-color: #222938;
   }
-  .license-select { /* Estilo específico se necessário, mas herdando o geral */
-    width: 100%; /* Ocupa toda a largura disponível no seu container */
-    /* padding: 0.5rem; Não sobrescrever padding vertical se height é fixo */
-    font-size: 0.875rem; /* Tamanho da fonte */
+  .license-select {
+    width: 100%;
+    font-size: 0.875rem;
   }
-  /* Responsividade para Tabela */
   @media (max-width: 768px) {
    .table-container {
-    display: block; /* Permite scroll horizontal */
-    overflow-x: auto; /* Adiciona scroll horizontal se necessário */
-    white-space: nowrap; /* Impede que o conteúdo da tabela quebre linha */
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
    }
    .dataTables_paginate {
-    justify-content: center; /* Centraliza paginação em telas menores */
+    justify-content: center;
    }
    .dataTables_filter,
    .dataTables_length {
-    text-align: center; /* Centraliza controles de filtro e tamanho */
-    float: none; /* Remove float para centralizar */
+    text-align: center;
+    float: none;
     width: 100%;
     margin-left: 0;
     margin-right: 0;
    }
    .dataTables_filter input {
     margin-left: 0.5rem;
-    width: calc(100% - 5em); /* Ajusta a largura do input de filtro */
+    width: calc(100% - 5em);
    }
   }
 
 #loadingOverlay {
-  position: fixed; /* Ou 'absolute' se relativo a um container específico */
+  position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.65); /* Fundo semi-transparente mais escuro */
-  z-index: 10000; /* Garante que fique por cima de outros elementos */
+  background-color: rgba(0, 0, 0, 0.65);
+  z-index: 10000;
   display: flex;
   justify-content: center;
   align-items: center;
   color: white;
-  backdrop-filter: blur(3px); /* Efeito de blur no fundo */
+  backdrop-filter: blur(3px);
 }
 
 .loader-content {
-  background-color: #2d3748; /* Mesma cor de .card */
+  background-color: #2d3748;
   padding: 25px 35px;
   border-radius: 8px;
   box-shadow: 0 5px 20px rgba(0,0,0,0.4);
@@ -520,89 +508,82 @@
   color: #e2e8f0;
 }
 
-/* Estilização da scrollbar para navegadores baseados em WebKit (Chrome, Edge, Safari) */
 ::-webkit-scrollbar {
-  width: 10px; /* Largura da scrollbar vertical */
-  height: 10px; /* Altura da scrollbar horizontal */
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a202c; /* Cor do fundo da pista (track), igual ao fundo da página */
-  border-radius: 8px; /* Bordas arredondadas para a pista */
+  background: #1a202c;
+  border-radius: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #4a5568; /* Cor do "polegar" (thumb), combinando com elementos como .card */
-  border-radius: 8px; /* Bordas arredondadas para o thumb */
-  border: 2px solid #1a202c; /* Borda para criar um pequeno espaço visual */
+  background: #4a5568;
+  border-radius: 8px;
+  border: 2px solid #1a202c;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #5a667a; /* Cor ao passar o mouse, igual ao hover de .card */
+  background: #5a667a;
 }
 
-/* Estilização para Firefox (padrão moderno) */
 html {
-  scrollbar-width: thin; /* Define uma scrollbar fina */
-  scrollbar-color: #4a5568 #1a202c; /* Cor do thumb e track */
+  scrollbar-width: thin;
+  scrollbar-color: #4a5568 #1a202c;
 }
 
-
-/* Container principal para o input de texto e a lista de opções */
 .multi-search-row .custom-dropdown-container {
-    flex-grow: 1; /* Permite que o container cresça como outros inputs na linha */
-    min-width: 150px; /* Mesma largura mínima de outros inputs na linha */
-    position: relative; /* Necessário para o posicionamento absoluto da lista de opções */
-    vertical-align: middle; /* Alinhamento vertical com outros elementos da linha */
+    flex-grow: 1;
+    min-width: 150px;
+    position: relative;
+    vertical-align: middle;
 }
 
-/* Input de texto onde o usuário digita para filtrar */
 .multi-search-row .custom-dropdown-text-input {
-    width: 100%; /* Ocupa toda a largura do seu container pai */
-    padding: 0.5rem; /* Consistente com o .search-input do seu tema */
-    border: 1px solid #4a5568; /* Cor de borda padrão do seu tema */
-    border-radius: 6px; /* Consistente com .search-input do seu tema */
-    font-size: 0.875rem; /* Tamanho de fonte padrão para inputs */
-    background-color: #1a202c; /* Cor de fundo padrão para inputs */
-    color: #e2e8f0; /* Cor de texto padrão */
-    box-sizing: border-box; /* Comportamento de padding e borda padrão */
-    transition: border-color 0.2s ease, background-color 0.2s ease; /* Transições do seu tema */
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #4a5568;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background-color: #1a202c;
+    color: #e2e8f0;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .multi-search-row .custom-dropdown-text-input:focus {
-    border-color: #3b82f6; /* Cor de borda no foco (azul) */
-    outline: none; /* Remove outline padrão */
-    background-color: #222938; /* Fundo levemente mais claro no foco */
+    border-color: #3b82f6;
+    outline: none;
+    background-color: #222938;
 }
 
 .multi-search-row .custom-dropdown-text-input::placeholder {
-    color: #718096; /* Cor do placeholder do seu tema */
+    color: #718096;
 }
 
-/* Lista de opções que aparece abaixo do input */
 .multi-search-row .custom-options-list {
     position: absolute;
-    top: 100%; /* Posiciona logo abaixo do input */
+    top: 100%;
     left: 0;
-    right: 0; /* Ocupa a mesma largura do input container */
-    background-color: #2d3748; /* Cor de fundo dos cards/menus */
-    border: 1px solid #4a5568; /* Borda consistente com cards */
-    border-top: none; /* Remove a borda superior para "conectar" ao input visualmente */
-    border-radius: 0 0 6px 6px; /* Cantos arredondados apenas na parte inferior */
-    z-index: 1050; /* Garante que fique sobre outros elementos */
-    max-height: 220px; /* Altura máxima antes de mostrar scroll */
-    overflow-y: auto; /* Scroll vertical se necessário */
-    box-shadow: 0 5px 10px rgba(0,0,0,0.25); /* Sombra para profundidade */
-    margin-top: 1px; /* Pequeno ajuste para alinhar melhor com a borda inferior do input */
+    right: 0;
+    background-color: #2d3748;
+    border: 1px solid #4a5568;
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    z-index: 1050;
+    max-height: 220px;
+    overflow-y: auto;
+    box-shadow: 0 5px 10px rgba(0,0,0,0.25);
+    margin-top: 1px;
 }
 
-/* Cada item individual na lista de opções */
 .multi-search-row .custom-option-item {
-    padding: 0.6rem 0.75rem; /* Espaçamento interno dos itens */
+    padding: 0.6rem 0.75rem;
     cursor: pointer;
-    color: #cbd5e0; /* Cor de texto dos itens (como texto de tabela) */
+    color: #cbd5e0;
     font-size: 0.875rem;
-    border-bottom: 1px solid #4a5568; /* Linha separadora sutil, como em tabelas */
+    border-bottom: 1px solid #4a5568;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -610,19 +591,18 @@ html {
 }
 
 .multi-search-row .custom-option-item:last-child {
-    border-bottom: none; /* Remove a borda do último item */
+    border-bottom: none;
 }
 
 .multi-search-row .custom-option-item:hover {
-    background-color: #4a5568; /* Cor de fundo no hover (como o hover de linhas de tabela) */
-    color: #ffffff; /* Texto mais claro no hover */
+    background-color: #4a5568;
+    color: #ffffff;
 }
 
-/* Item especial para mensagem de "Nenhum resultado" */
 .multi-search-row .custom-option-item.no-results {
-    color: #a0aec0; /* Cor de texto secundária */
+    color: #a0aec0;
     cursor: default;
-    background-color: transparent !important; /* Sem cor de fundo ou hover */
+    background-color: transparent !important;
 }
 
 .multi-search-row .column-select,
@@ -637,40 +617,42 @@ html {
     min-width: 120px;
 }
 
-/* Estilos para Modal da API da IA - Reutilizando e adaptando existentes */
+/* === ESTILOS PARA MODAL DA API DA IA (CORRIGIDO) === */
 .modal {
     position: fixed;
-    z-index: 20000; /* Acima do loadingOverlay */
+    z-index: 20000;
     left: 0;
     top: 0;
     width: 100%;
     height: 100%;
     overflow: auto;
-    background-color: rgba(0,0,0,0.7); /* Mais escuro que o loading overlay */
-    display: none; /* Controlado por JS - use 'flex' para mostrar e centralizar */
+    background-color: rgba(0,0,0,0.7);
+    display: none; /* PADRÃO: ESCONDIDO */
     justify-content: center;
     align-items: center;
     backdrop-filter: blur(5px);
 }
 
-.modal.hidden { /* Adiciona esta classe para controle via JS, se não usar display:none direto */
-    display: none !important;
+/* CLASSE PARA MOSTRAR O MODAL */
+.modal.is-active {
+    display: flex !important; /* Garante que sobrescreva o display:none base */
 }
 
 .modal-content {
-    background-color: #2d3748; /* Cor de .card */
+    background-color: #2d3748;
     margin: auto;
     padding: 25px 30px;
     border-radius: 8px;
     width: 90%;
-    max-width: 550px; /* Um pouco maior para o conteúdo da API */
+    max-width: 550px;
     box-shadow: 0 8px 25px rgba(0,0,0,0.5);
     border: 1px solid #4a5568;
     position: relative;
-    color: #e2e8f0; /* Texto claro */
+    color: #e2e8f0;
 }
 .modal-content h3 {
     color: #ffffff;
+    margin-top: 0;
     margin-bottom: 1rem;
     font-size: 1.3em;
 }
@@ -679,28 +661,41 @@ html {
     font-size: 0.95em;
     color: #cbd5e0;
 }
+.modal-content p:last-of-type {
+    margin-bottom: 1rem;
+}
+.modal-content input[type="password"] {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #4a5568;
+    border-radius: 4px;
+    font-size: 1em;
+    background-color: #1a202c;
+    color: #e2e8f0;
+    box-sizing: border-box;
+}
 
 .close-button {
     color: #a0aec0;
-    /* float: right; Removido para melhor controle com position absolute */
     font-size: 28px;
     font-weight: bold;
     position: absolute;
     top: 10px;
     right: 20px;
     transition: color 0.2s ease;
+    cursor: pointer;
 }
 
 .close-button:hover,
 .close-button:focus {
     color: #ffffff;
     text-decoration: none;
-    cursor: pointer;
 }
 
 .warning-text {
-    background-color: rgba(255, 193, 7, 0.1); /* Amarelo de warning com transparência */
-    color: #ffca2c; /* Texto amarelo */
+    background-color: rgba(255, 193, 7, 0.1);
+    color: #ffca2c;
     border: 1px solid rgba(255, 193, 7, 0.3);
     padding: 10px 15px;
     border-radius: 6px;
@@ -708,25 +703,31 @@ html {
     margin: 15px 0;
 }
 .warning-text strong {
-    color: #ffd54f; /* Destaque para o strong */
+    color: #ffd54f;
 }
 
-/* Ajuste para o botão de salvar chave no modal da IA ficar com 100% de largura */
 #saveAiApiKeyButton {
     width: 100%;
+    margin-top: 10px;
+}
+#aiApiKeyMessage {
+    font-size:0.9em;
+    margin-top:10px;
+    min-height: 1.2em;
 }
 #aiApiKeyMessage.success {
-    color: #4caf50; /* Verde sucesso */
+    color: #4caf50;
 }
 #aiApiKeyMessage.error {
-    color: #f44336; /* Vermelho erro */
+    color: #f44336;
 }
 
-/* Indicador de Carregamento da IA */
-#aiLoadingIndicator:not(.hidden) { /* Estilo para quando não está hidden */
-    color: #a0aec0;
-    padding: 5px 0;
-}
+/* Classe genérica .hidden para outros elementos */
 .hidden {
     display: none !important;
 }
+#aiLoadingIndicator:not(.hidden) {
+    color: #a0aec0;
+    padding: 5px 0;
+}
+/* === FIM DOS ESTILOS PARA MODAL DA API DA IA === */
