@@ -113,7 +113,6 @@ $(document).ready(function() {
             ],
             initComplete: function() {
                 const api = this.api();
-                // Column visibility checkboxes
                 $('#colContainer .col-vis').each(function() {
                     const idx = +$(this).data('col');
                     try {
@@ -131,7 +130,6 @@ $(document).ready(function() {
                     } catch (e) { console.warn("Error toggling column visibility:", idx, e); }
                 });
 
-                // Apply initial multi-search if fields are present
                 if ($('#multiSearchFields .multi-search-row').length > 0) {
                     applyMultiSearch();
                 }
@@ -161,8 +159,8 @@ $(document).ready(function() {
         const $customOptionsList = $row.find('.custom-options-list');
         const $hiddenValueInput = $row.find('.search-value-input');
 
-        $customDropdownTextInput.off();
-        $customOptionsList.off();
+        $customDropdownTextInput.off('input focus blur');
+        $customOptionsList.off('mousedown', '.custom-option-item');
 
         if (columnConfig && columnConfig.useDropdown) {
             $searchInput.hide();
@@ -197,11 +195,11 @@ $(document).ready(function() {
             });
 
             $customDropdownTextInput.on('focus', function() {
-                $(this).trigger('input'); // Populate options on focus
+                $(this).trigger('input');
                 $customOptionsList.show();
             });
 
-            $customOptionsList.on('mousedown', '.custom-option-item', function(e) { // mousedown to fire before blur
+            $customOptionsList.on('mousedown', '.custom-option-item', function(e) {
                 e.preventDefault();
                 if ($(this).hasClass('no-results')) return;
 
@@ -215,10 +213,10 @@ $(document).ready(function() {
             let blurTimeout;
             $customDropdownTextInput.on('blur', function() {
                 clearTimeout(blurTimeout);
-                blurTimeout = setTimeout(() => { $customOptionsList.hide(); }, 150); // Delay to allow click on options
+                blurTimeout = setTimeout(() => { $customOptionsList.hide(); }, 150);
             });
 
-        } else { // Not a dropdown field
+        } else {
             $searchInput.show().val('');
             $customDropdownContainer.hide();
             $hiddenValueInput.val('').hide();
@@ -245,16 +243,16 @@ $(document).ready(function() {
                 </div>
             `);
             $container.append($row);
-            updateSearchFieldUI($row); // Initial setup based on default selected column
+            updateSearchFieldUI($row);
 
             $row.find('.column-select').on('change', function() {
-                updateSearchFieldUI($row); // Update UI when column selection changes
+                updateSearchFieldUI($row);
                 const selectedColIndex = $row.find('.column-select').val();
                 const columnConfig = searchableColumnsConfig.find(c => c.index == selectedColIndex);
                 if (columnConfig && columnConfig.useDropdown) {
-                    $row.find('.search-value-input').val('').trigger('change'); // Clear hidden value for dropdown
+                    $row.find('.search-value-input').val('').trigger('change');
                 } else {
-                    $row.find('.search-input').val('').trigger('input'); // Clear text input
+                    $row.find('.search-input').val('').trigger('input');
                 }
             });
 
@@ -263,7 +261,7 @@ $(document).ready(function() {
 
             $row.find('.remove-field').on('click', function() {
                 const $multiSearchRow = $(this).closest('.multi-search-row');
-                $multiSearchRow.find('.custom-dropdown-text-input').off(); // Clean up listeners
+                $multiSearchRow.find('.custom-dropdown-text-input').off();
                 $multiSearchRow.find('.custom-options-list').off();
                 $multiSearchRow.remove();
                 applyMultiSearch();
@@ -273,7 +271,6 @@ $(document).ready(function() {
         $('#addSearchField').off('click').on('click', addSearchField);
         $('#multiSearchOperator').off('change').on('change', applyMultiSearch);
 
-        // Add one search field by default if data is loaded
         if ($container.children().length === 0 && allData && allData.length > 0) {
             addSearchField();
         } else if (!(allData && allData.length > 0)) {
@@ -296,8 +293,8 @@ $(document).ready(function() {
             return;
         }
 
-        table.search(''); // Clear global search
-        while ($.fn.dataTable.ext.search.length > 0) { $.fn.dataTable.ext.search.pop(); } // Clear custom search functions
+        table.search('');
+        $.fn.dataTable.ext.search.pop();
 
         const filters = [];
         $('#multiSearchFields .multi-search-row').each(function() {
@@ -308,12 +305,11 @@ $(document).ready(function() {
                 searchTerm = columnConfig.useDropdown ?
                     $(this).find('.search-value-input').val() :
                     $(this).find('.search-input').val().trim();
-
                 if (searchTerm) {
                     filters.push({
-                        col: parseInt(colIndex, 10), // Used for direct apiData access for non-dropdown text search
+                        col: parseInt(colIndex, 10),
                         term: searchTerm,
-                        dataProp: columnConfig.dataProp, // Used for object property access for dropdowns
+                        dataProp: columnConfig.dataProp,
                         isDropdown: columnConfig.useDropdown
                     });
                 }
@@ -324,21 +320,21 @@ $(document).ready(function() {
         if (filters.length > 0) {
             criteriaText += ` (${filters.length} active filter(s))`;
             $.fn.dataTable.ext.search.push(
-                function(settings, apiData, dataIndex) { // apiData is the array of raw string values for the row's cells
-                    if (settings.nTable.id !== table.table().node().id) return true; // Ensure this is for our table
-                    const rowData = table.row(dataIndex).data(); // Full object data for the row
+                function(settings, apiData, dataIndex) {
+                    if (settings.nTable.id !== table.table().node().id) return true;
+                    const rowData = table.row(dataIndex).data();
                     if (!rowData) return false;
 
                     const logicFn = operator === 'OR' ? filters.some.bind(filters) : filters.every.bind(filters);
                     return logicFn(filter => {
                         let cellDataToTest;
-                        if (filter.dataProp === 'Licenses') { // Special handling for Licenses array
+                        if (filter.dataProp === 'Licenses') {
                             return (rowData.Licenses && Array.isArray(rowData.Licenses)) ?
                                 rowData.Licenses.some(l => (l.LicenseName || '').toLowerCase() === filter.term.toLowerCase()) : false;
-                        } else if (filter.isDropdown) { // Exact match for dropdowns using object property
+                        } else if (filter.isDropdown) {
                             cellDataToTest = rowData[filter.dataProp] || '';
                             return String(cellDataToTest).toLowerCase() === filter.term.toLowerCase();
-                        } else { // Contains match for text inputs using DataTables' cell data array
+                        } else {
                             cellDataToTest = apiData[filter.col] || '';
                             return String(cellDataToTest).toLowerCase().includes(filter.term.toLowerCase());
                         }
@@ -355,8 +351,7 @@ $(document).ready(function() {
         showLoader('Clearing filters...');
         setTimeout(() => {
             if (table) {
-                $(table.table().header()).find('tr:eq(1) th input').val(''); // Clear individual column filters if they existed
-                table.search('').columns().search(''); // Clear global and all column searches
+                table.search('').columns().search('');
             }
             $('#multiSearchFields .multi-search-row').each(function() {
                 $(this).find('.custom-dropdown-text-input').off();
@@ -365,17 +360,16 @@ $(document).ready(function() {
             $('#multiSearchFields').empty();
 
             if (allData && allData.length > 0) {
-                setupMultiSearch(); // Re-add one default search field
+                setupMultiSearch();
             } else {
                 $('#searchCriteria').text('No data loaded.');
             }
-            while ($.fn.dataTable.ext.search.length > 0) { $.fn.dataTable.ext.search.pop(); } // Clear custom search functions
+            $.fn.dataTable.ext.search.pop();
 
             if (table) table.draw(); else hideLoader();
 
-            $('#alertPanel').empty(); // Clear alerts
-            // Reset column visibility to default
-            const defaultVisibleCols = [1, 2, 3, 6]; // Name, Email, Job Title, Licenses
+            $('#alertPanel').empty();
+            const defaultVisibleCols = [1, 2, 3, 6];
             $('#colContainer .col-vis').each(function() {
                 const idx = +$(this).data('col');
                 const isDefaultVisible = defaultVisibleCols.includes(idx);
@@ -385,14 +379,14 @@ $(document).ready(function() {
                 }
                 $(this).prop('checked', isDefaultVisible);
             });
-             if (!table && !(allData && allData.length > 0)) { // If table wasn't even init and no data
+             if (!table && !(allData && allData.length > 0)) {
                  $('#searchCriteria').text('No data loaded. Please load a JSON file to start.');
              }
         }, 50);
     });
 
     function downloadCsv(csvContent, fileName) {
-        const bom = "\uFEFF"; // BOM for UTF-8
+        const bom = "\uFEFF";
         const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         if (link.download !== undefined) {
@@ -420,22 +414,22 @@ $(document).ready(function() {
                 return;
             }
             const visibleColumns = [];
-            table.columns(':visible').every(function() { // Iterate only over visible columns
+            table.columns(':visible').every(function() {
                 const columnConfig = table.settings()[0].aoColumns[this.index()];
-                const colTitle = $(table.column(this.index()).header()).text() || columnConfig.title; // Get header text
-                const dataProp = columnConfig.mData; // Get the 'data' property name
+                const colTitle = $(table.column(this.index()).header()).text() || columnConfig.title;
+                const dataProp = columnConfig.mData;
                 visibleColumns.push({ title: colTitle, dataProp: dataProp });
             });
 
             const headerRow = visibleColumns.map(col => escapeCsvValue(col.title)).join(',');
             const csvRows = rowsToExport.map(rowData => {
                 return visibleColumns.map(col => {
-                    let cellData = rowData[col.dataProp]; // Access data using the 'data' property
+                    let cellData = rowData[col.dataProp];
                     let shouldForceQuotes = false;
                     if (col.dataProp === 'BusinessPhones') {
                         cellData = Array.isArray(cellData) ? cellData.join('; ') : (cellData || '');
                         if (String(cellData).includes(';')) shouldForceQuotes = true;
-                    } else if (col.dataProp === 'Licenses') { // Correctly handle licenses array
+                    } else if (col.dataProp === 'Licenses') {
                         const licensesArray = (rowData.Licenses && Array.isArray(rowData.Licenses)) ?
                             rowData.Licenses.map(l => l.LicenseName || '').filter(name => name) : [];
                         cellData = licensesArray.length > 0 ? licensesArray.join('; ') : '';
@@ -459,7 +453,7 @@ $(document).ready(function() {
                 lines.push(['NAME+LOCATION CONFLICTS']);
                 lines.push(['Name', 'Location'].map(h => escapeCsvValue(h)));
                 nameConflicts.forEach(key => lines.push(key.split('|||').map(value => escapeCsvValue(value))));
-                lines.push([]); // Empty line separator
+                lines.push([]);
             }
             if (dupLicUsers.size) {
                 lines.push(['USERS with Duplicate Licenses']);
@@ -472,7 +466,7 @@ $(document).ready(function() {
                     const hasPaid = (user.Licenses || []).some(l => !(l.LicenseName || '').toLowerCase().includes('free'));
                     lines.push([
                         escapeCsvValue(user.DisplayName), escapeCsvValue(user.OfficeLocation),
-                        escapeCsvValue(joinedDups, true), // Force quotes if semicolons are present
+                        escapeCsvValue(joinedDups, true),
                         escapeCsvValue(hasPaid ? 'Yes' : 'No')
                     ]);
                 });
@@ -509,30 +503,20 @@ $(document).ready(function() {
             function findIssuesForWorker(data) {
                 const nameMap = new Map();
                 const dupSet = new Set();
-                const officeLic = new Set([ // Define licenses that are typically "base" or "suite" licenses
+                const officeLic = new Set([
                     'Microsoft 365 E3', 'Microsoft 365 E5',
                     'Microsoft 365 Business Standard', 'Microsoft 365 Business Premium',
                     'Office 365 E3', 'Office 365 E5'
-                    // Add other relevant "suite" licenses here if needed
                 ]);
                 data.forEach(u => {
                     const k = nameKeyInternal(u);
-                    nameMap.set(k, (nameMap.get(k) || 0) + 1); // Count occurrences for name+location conflicts
-
+                    nameMap.set(k, (nameMap.get(k) || 0) + 1);
                     const licCount = new Map();
                     (u.Licenses || []).forEach(l => {
-                        // More robust way to check for base "Office/Microsoft 365" type licenses
                         const baseName = (l.LicenseName || '');
-                        if (baseName) { // Count all licenses
-                           licCount.set(baseName, (licCount.get(baseName) || 0) + 1);
-                        }
+                        if (baseName) { licCount.set(baseName, (licCount.get(baseName) || 0) + 1); }
                     });
-                    // Check if any of the typical "suite" licenses are duplicated
-                    if ([...licCount].some(([lic, c]) => officeLic.has(lic) && c > 1)) {
-                        dupSet.add(u.Id);
-                    }
-                    // Alternative: Check if *any* license is duplicated (more general)
-                    // if ([...licCount].some(([,c]) => c > 1)) { dupSet.add(u.Id); }
+                    if ([...licCount].some(([lic, c]) => officeLic.has(lic) && c > 1)) { dupSet.add(u.Id); }
                 });
                 const conflictingNameKeysArray = [...nameMap].filter(([, count]) => count > 1).map(([key]) => key);
                 return { nameConflictsArray: conflictingNameKeysArray, dupLicUsersArray: Array.from(dupSet) };
@@ -560,7 +544,7 @@ $(document).ready(function() {
                         return;
                     }
                     const validatedData = validationResult.validatedData;
-                    if (validatedData.length === 0) { // If no valid data after validation
+                    if (validatedData.length === 0) {
                          self.postMessage({ validatedData: [], nameConflictsArray: [], dupLicUsersArray: [], uniqueFieldValues: {} });
                          return;
                     }
@@ -576,7 +560,7 @@ $(document).ready(function() {
                 } catch (err) {
                     self.postMessage({ error: 'Error in Web Worker: ' + err.message + '\\\\n' + err.stack });
                 } finally {
-                    self.close(); // Important to close the worker
+                    self.close();
                 }
             };
         `;
@@ -584,7 +568,7 @@ $(document).ready(function() {
         const worker = new Worker(URL.createObjectURL(blob));
 
         worker.onmessage = function(e) {
-            URL.revokeObjectURL(blob); // Clean up blob URL
+            URL.revokeObjectURL(blob);
             const { validatedData: processedData, nameConflictsArray, dupLicUsersArray, uniqueFieldValues: uFValues, error } = e.data;
 
             if (error) {
@@ -600,56 +584,51 @@ $(document).ready(function() {
             uniqueFieldValues = uFValues;
 
             if (processedData && processedData.length > 0) {
-                showLoader('Rendering table...'); // Show loader before table init
-                setTimeout(() => { // Allow UI to update loader message
+                showLoader('Rendering table...');
+                setTimeout(() => {
                     initTable(processedData);
-                    setupMultiSearch(); // Setup search after table is initialized
+                    setupMultiSearch();
                     $('#searchCriteria').text(`Data loaded (${processedData.length} users). Use filters to refine.`);
-                    // hideLoader() is called in table.drawCallback
-                }, 50); // Small delay for UI update
+                }, 50);
             } else {
                 hideLoader();
                 alert('No valid users found in the data. Please check the JSON file or PowerShell script output.');
                 $('#searchCriteria').text('No valid data loaded.');
-                if (table) { table.clear().draw(); } // Clear table if it exists
+                if (table) { table.clear().draw(); }
                 $('#multiSearchFields').empty();
                 $('#alertPanel').empty();
             }
         };
 
         worker.onerror = function(e) {
-            URL.revokeObjectURL(blob); // Clean up blob URL
+            URL.revokeObjectURL(blob);
             hideLoader();
             console.error(`Error in Web Worker: Line ${e.lineno} in ${e.filename}: ${e.message}`);
             alert('A critical error occurred during data processing. Please check the console.');
             $('#searchCriteria').text('Critical error loading data.');
         };
-        // Pass a structured clone of searchableColumnsConfig to the worker
         worker.postMessage({ rawData: rawData, searchableColumnsConfig: JSON.parse(JSON.stringify(searchableColumnsConfig)) });
     }
 
-    // Initial Data Loading Logic
     try {
-        // userData is injected by PowerShell script
         if (typeof userData !== 'undefined' && ( (Array.isArray(userData) && userData.length > 0) || (userData.data && Array.isArray(userData.data) && userData.data.length > 0) ) ) {
             let dataToProcess = Array.isArray(userData) ? userData : userData.data;
-            // Check for PowerShell specific error/message structure
             if (userData.error || (Array.isArray(dataToProcess) && dataToProcess.length === 0 && !userData.message) ) {
                  $('#searchCriteria').text(userData.error || 'JSON data is empty or invalid as provided by PowerShell.');
                  console.error("Error in userData from PowerShell or empty data:", userData);
                  hideLoader();
             } else if (userData.message && Array.isArray(dataToProcess) && dataToProcess.length === 0) {
-                 $('#searchCriteria').text(userData.message); // E.g., "No user data found or processed."
+                 $('#searchCriteria').text(userData.message);
                  hideLoader();
             }
-            else { // Assumed valid data array
+            else {
                 processDataWithWorker(dataToProcess);
             }
-        } else if (typeof userData !== 'undefined' && userData.message) { // Handles { "message": "No data...", "data": [] }
+        } else if (typeof userData !== 'undefined' && userData.message) {
              $('#searchCriteria').text(userData.message);
              hideLoader();
         }
-        else { // Fallback if userData is not in expected format or not defined
+        else {
             console.warn("Global variable 'userData' is not defined as expected or indicates an error state from PowerShell.");
             $('#searchCriteria').html('Failed to load data from PowerShell or data is empty. Check PowerShell script output. <br/> (If running HTML directly, <code>userData</code> is not defined).');
             hideLoader();
@@ -662,7 +641,7 @@ $(document).ready(function() {
     }
 
     // ===========================================================
-    // NOVA FUNCIONALIDADE DE IA - INÍCIO
+    // FUNCIONALIDADE DE IA - INÍCIO
     // ===========================================================
     const AI_API_KEY_STORAGE_KEY = 'licenseAiApiKey_v1';
 
@@ -686,28 +665,28 @@ $(document).ready(function() {
     function updateAiApiKeyStatusDisplay() {
         if (getAiApiKey()) {
             $manageAiApiKeyButton.text('API IA Config.');
-            $manageAiApiKeyButton.css('background-color', '#28a745'); // Verde sucesso
+            $manageAiApiKeyButton.css('background-color', '#28a745');
             $manageAiApiKeyButton.attr('title', 'Chave da API da IA configurada. Clique para alterar.');
         } else {
             $manageAiApiKeyButton.text('Configurar API IA');
-            $manageAiApiKeyButton.css('background-color', ''); // Volta à cor original do botão (button-blue)
+            $manageAiApiKeyButton.css('background-color', ''); // Reverte para o estilo original da classe .button-blue
             $manageAiApiKeyButton.attr('title', 'Configurar chave da API da IA para análise.');
         }
     }
    
     $manageAiApiKeyButton.on('click', function() {
         $aiApiKeyInput.val(getAiApiKey() || '');
-        $aiApiKeyModal.addClass('is-active'); // MOSTRAR MODAL
+        $aiApiKeyModal.addClass('is-active');
         $aiApiKeyInput.focus();
     });
 
     $closeAiModalButton.on('click', function() {
-        $aiApiKeyModal.removeClass('is-active'); // ESCONDER MODAL
+        $aiApiKeyModal.removeClass('is-active');
     });
 
-    $(window).on('click', function(event) {
-        if (event.target == $aiApiKeyModal[0]) {
-            $aiApiKeyModal.removeClass('is-active'); // ESCONDER MODAL
+    $aiApiKeyModal.on('click', function(event) {
+        if (event.target === $aiApiKeyModal[0]) {
+            $aiApiKeyModal.removeClass('is-active');
         }
     });
 
@@ -719,19 +698,19 @@ $(document).ready(function() {
             updateAiApiKeyStatusDisplay();
             setTimeout(() => {
                 $aiApiKeyMessage.text('').removeClass('success error');
-                $aiApiKeyModal.removeClass('is-active'); // ESCONDER MODAL
+                $aiApiKeyModal.removeClass('is-active');
             }, 1500);
         } else {
             $aiApiKeyMessage.text('Por favor, insira uma chave válida.').removeClass('success').addClass('error');
         }
     });
 
-    // --- Interação com a IA ---
+    // --- Interação com a IA (Configurado para OpenAI/ChatGPT) ---
     $askAiButton.on('click', async function() {
         const apiKey = getAiApiKey();
         if (!apiKey) {
-            alert('Por favor, configure sua chave de API da IA primeiro.');
-            $aiApiKeyModal.addClass('is-active'); // MOSTRAR MODAL para configuração
+            alert('Por favor, configure sua chave de API da OpenAI (ChatGPT) primeiro.');
+            $aiApiKeyModal.addClass('is-active');
             return;
         }
 
@@ -756,7 +735,7 @@ $(document).ready(function() {
             promptContext = `Resumo dos dados de licença:\n- Total de Usuários: ${totalUsers}\n- Principais Licenças (Top 5 por atribuição):\n  - ${topLicenses}`;
             
             let sampleDataForPrompt = [];
-            const maxSample = 5; // Limite de usuários na amostra
+            const maxSample = 5;
             if (allData.length > 0) {
                 sampleDataForPrompt = allData.slice(0, maxSample).map(u => ({
                     DisplayName: u.DisplayName, 
@@ -767,7 +746,7 @@ $(document).ready(function() {
             }
             
             if (allData.length > maxSample) {
-                promptContext += `\n\nNota: Os dados completos contêm ${allData.length} usuários. Uma amostra de até ${maxSample} usuários é fornecida abaixo para detalhamento, focando em nome, cargo, local e licenças.`;
+                promptContext += `\n\nNota: Os dados completos contêm ${allData.length} usuários. Uma pequena amostra de até ${maxSample} usuários é fornecida abaixo para detalhamento, focando em nome, cargo, local e licenças.`;
             }
             promptContext += `\n\nAmostra de Dados (Nome, Cargo, Local e Licenças):\n${JSON.stringify(sampleDataForPrompt, null, 2)}`;
 
@@ -778,127 +757,70 @@ $(document).ready(function() {
 
         let userQueryForAI = userQuestion || "Com base no resumo e na amostra de dados de licença fornecidos, quais são os principais insights, possíveis otimizações de custos ou anomalias que você pode identificar?";
        
-        // << ====================================================================== >>
-        // << ATENÇÃO: VOCÊ PRECISA CONFIGURAR AS PRÓXIMAS LINHAS PARA SEU PROVEDOR DE IA >>
-        // << ====================================================================== >>
-        // 1. Defina o AI_PROVIDER_ENDPOINT com a URL correta da API da IA.
-        // 2. Adapte os HEADERS (especialmente a Autorização com sua API Key).
-        // 3. Adapte o BODY da requisição para o formato esperado pela sua IA (OpenAI, Gemini, Claude, etc.).
-        // 4. Adapte a EXTRAÇÃO DA RESPOSTA para pegar o texto da IA corretamente do JSON de resposta.
-        // ------------------------------------------------------------------------------
-
-        const AI_PROVIDER_ENDPOINT = 'URL_DA_SUA_API_DE_IA_ESPECIFICA_AQUI'; // <<== CONFIGURE ISTO!
-
-        if (AI_PROVIDER_ENDPOINT === 'URL_DA_SUA_API_DE_IA_ESPECIFICA_AQUI') {
-            $aiResponseArea.html('<strong>CONFIGURAÇÃO NECESSÁRIA:</strong><br>O endpoint da API da IA (<code>AI_PROVIDER_ENDPOINT</code>) e a lógica de chamada no arquivo <code>scripts.js</code> precisam ser definidos para o seu provedor de IA específico.');
-            return;
-        }
+        // === OpenAI/ChatGPT API Configuration ===
+        const AI_PROVIDER_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 
         $aiLoadingIndicator.removeClass('hidden');
         $askAiButton.prop('disabled', true);
-        $aiResponseArea.html('Analisando com IA... <i class="fas fa-spinner fa-spin"></i>'); // Adiciona ícone de spinner
+        $aiResponseArea.html('Analisando com IA... <i class="fas fa-spinner fa-spin"></i>');
 
         try {
             const requestHeaders = {
                 'Content-Type': 'application/json',
-                // Exemplo para OpenAI (substitua 'apiKey' pela sua chave real):
-                // 'Authorization': `Bearer ${apiKey}`,
-
-                // Exemplo para Google AI Studio (Gemini API) - a chave normalmente vai na URL
-                // Se a API usar um header específico:
-                // 'x-api-key': apiKey, // Exemplo para algumas APIs
-                // 'x-goog-api-key': apiKey, // Exemplo para APIs do Google que usam este header
+                'Authorization': `Bearer ${apiKey}` // Chave da API da OpenAI
             };
-             // ADICIONE AQUI A LÓGICA PARA INCLUIR A CHAVE NO HEADER SE NECESSÁRIO
-             // Exemplo:
-             // if (AI_PROVIDER_ENDPOINT.toLowerCase().includes("api.openai.com")) {
-             //     requestHeaders['Authorization'] = `Bearer ${apiKey}`;
-             // } else if (AI_PROVIDER_ENDPOINT.toLowerCase().includes("generativelanguage.googleapis") && !AI_PROVIDER_ENDPOINT.includes("?key=")) {
-             //     // Para algumas APIs do Google (não Gemini via REST padrão que usa key na URL)
-             //     // requestHeaders['x-goog-api-key'] = apiKey;
-             // }
 
+            const requestBody = {
+                model: "gpt-3.5-turbo", // Ou "gpt-4o", "gpt-4", etc. Verifique os modelos disponíveis.
+                messages: [
+                    { role: "system", content: systemMessage },
+                    { role: "user", content: `${promptContext}\n\nPergunta do usuário: ${userQueryForAI}` }
+                ],
+                max_tokens: 800, // Ajuste conforme a necessidade de comprimento da resposta
+                temperature: 0.5  // 0.0 para mais determinístico, até 1.0 para mais criativo
+            };
 
-            let finalEndpoint = AI_PROVIDER_ENDPOINT;
-            // Exemplo para Google Gemini, onde a chave vai na URL:
-            // if (AI_PROVIDER_ENDPOINT.toLowerCase().includes("generativelanguage.googleapis.com")) { // Gemini
-            //     if (!finalEndpoint.includes("?key=")) { // Adiciona a chave apenas se não estiver já na URL
-            //        finalEndpoint = `${AI_PROVIDER_ENDPOINT}?key=${apiKey}`;
-            //     }
-            // }
-
-            // Adapte o corpo da requisição para o formato esperado pela sua IA
-            let requestBody = {};
-
-            // Exemplo para OpenAI (modelos GPT):
-            // requestBody = {
-            //     model: "gpt-3.5-turbo", // Ou "gpt-4", "gpt-4o" etc.
-            //     messages: [
-            //         { role: "system", content: systemMessage },
-            //         { role: "user", content: `${promptContext}\n\nPergunta do usuário: ${userQueryForAI}` }
-            //     ],
-            //     max_tokens: 800, // Ajuste conforme necessário
-            //     temperature: 0.5
-            // };
-
-            // Exemplo para Google Gemini (Content API):
-            // requestBody = {
-            //   contents: [{
-            //     role: "user", // Ou pode omitir role para prompts simples
-            //     parts: [{ text: `${systemMessage}\n\nContexto dos Dados:\n${promptContext}\n\nPergunta do usuário: ${userQueryForAI}` }]
-            //   }],
-            //   generationConfig: { "maxOutputTokens": 800, "temperature": 0.5 } // Ajuste conforme necessário
-            // };
-
-            // !! IMPORTANTE: Se você não definir `requestBody` acima com um exemplo VÁLIDO para sua API, a IA não funcionará.
-            if (Object.keys(requestBody).length === 0) { // Verifica se o objeto está vazio
-                 $aiResponseArea.html('<strong>ERRO DE CONFIGURAÇÃO:</strong><br>O `requestBody` para a API da IA não foi configurado corretamente no `scripts.js`. Verifique os exemplos comentados e adapte para seu provedor de IA.');
-                 $aiLoadingIndicator.addClass('hidden');
-                 $askAiButton.prop('disabled', false);
-                 return; // Interrompe a execução se o corpo não estiver configurado
-            }
-
-            const response = await fetch(finalEndpoint, {
+            const response = await fetch(AI_PROVIDER_ENDPOINT, {
                 method: 'POST',
                 headers: requestHeaders,
                 body: JSON.stringify(requestBody)
             });
 
             if (!response.ok) {
-                const errorText = await response.text(); 
-                let errorJson = null;
-                try { errorJson = JSON.parse(errorText); } catch (e) { /* não é JSON */ }
-                
-                let detailedMessage = errorJson ? (errorJson.error?.message || JSON.stringify(errorJson)) : errorText;
-                console.error("Erro da API da IA:", response.status, detailedMessage);
-                throw new Error(`Erro da API (${response.status}): ${detailedMessage}`);
+                const errorData = await response.json().catch(() => ({ // Tenta parsear JSON, senão pega texto
+                     message: `Erro HTTP ${response.status} - ${response.statusText}` 
+                }));
+                let detailedMessage = errorData.error?.message || JSON.stringify(errorData);
+                console.error("Erro da API da OpenAI:", response.status, detailedMessage);
+                throw new Error(`Erro da API OpenAI (${response.status}): ${detailedMessage}`);
             }
 
             const data = await response.json();
-            console.log("Resposta completa da API da IA:", data);
+            console.log("Resposta completa da API da OpenAI:", data);
 
-            // Extraia a resposta da IA (ALTAMENTE DEPENDENTE DO PROVEDOR)
-            let aiTextResponse = "Não foi possível extrair uma resposta de texto da IA. Verifique o console para a resposta completa.";
+            let aiTextResponse = "Não foi possível extrair uma resposta da IA. Verifique o console.";
+            if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+                aiTextResponse = data.choices[0].message.content.trim();
+            }
             
-            // Exemplo para OpenAI:
-            // if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
-            //     aiTextResponse = data.choices[0].message.content.trim();
-            // }
-            // Exemplo para Google Gemini:
-            // if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text) {
-            //    aiTextResponse = data.candidates[0].content.parts.map(part => part.text).join("").trim(); // Concatena todas as partes sem espaço extra
-            // }
-            
-            // Para exibir Markdown de forma simples (substituindo newlines e alguns formatos básicos)
-            // Você pode usar uma biblioteca de Markdown para JS (como Showdown.js ou Marked.js) para uma renderização mais rica
-            let formattedHtml = escapeHtml(aiTextResponse) // Escapa HTML primeiro para segurança
-                                .replace(/\n/g, '<br>')
-                                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Negrito
-                                .replace(/\*(.*?)\*/g, '<em>$1</em>')     // Itálico
-                                .replace(/^- (.*)/gm, '<ul><li>$1</li></ul>') // Listas simples (needs improvement for consecutive items)
-                                .replace(/<\/ul>\s*<ul>/g, ''); // Merge consecutive lists
-
-            $aiResponseArea.html(formattedHtml);
+            function simpleMarkdownToHtml(mdText) {
+                if (typeof mdText !== 'string') return '';
+                // Escapa HTML básico para segurança
+                let html = escapeHtml(mdText);
+                // Converte quebras de linha
+                html = html.replace(/\n/g, '<br>');
+                // Negrito: **texto** ou __texto__
+                html = html.replace(/\*\*(.*?)\*\*|__(.*?)__/g, '<strong>$1$2</strong>');
+                // Itálico: *texto* ou _texto_
+                html = html.replace(/\*(.*?)\*|_(.*?)_/g, '<em>$1$2</em>');
+                // Listas não ordenadas (simples, cada item em uma nova linha começando com - ou *)
+                html = html.replace(/^(?:<br>)?\s*[-*]\s+(.*)/gm, (match, item) => `<li>${item.trim()}</li>`);
+                // Envolve blocos de <li> em <ul>, corrigindo múltiplos <ul>
+                html = html.replace(/<li>.*?<\/li>(?:\s*<br>\s*<li>.*?<\/li>)*/g, (match) => `<ul>${match}</ul>`);
+                html = html.replace(/<\/ul>\s*<ul>/g, ''); // Junta listas adjacentes
+                return html;
+            }
+            $aiResponseArea.html(simpleMarkdownToHtml(aiTextResponse));
 
         } catch (error) {
             console.error('Erro ao chamar ou processar resposta da API da IA:', error);
@@ -909,9 +831,9 @@ $(document).ready(function() {
         }
     });
    
-    updateAiApiKeyStatusDisplay(); // Atualiza o status do botão ao carregar
+    updateAiApiKeyStatusDisplay();
     // ===========================================================
-    // NOVA FUNCIONALIDADE DE IA - FIM
+    // FUNCIONALIDADE DE IA - FIM
     // ===========================================================
 
 }); // Fim do $(document).ready()
