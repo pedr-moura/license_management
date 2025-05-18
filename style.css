@@ -1,5 +1,4 @@
-
-  * {
+* {
    margin: 0;
    padding: 0;
    box-sizing: border-box;
@@ -51,12 +50,13 @@
    border-bottom: 1px solid #4a5568;
    display: flex;
    align-items: center;
-   justify-content: space-between;
+   justify-content: space-between; /* Mantido para caso haja mais itens no header */
   }
   header h1 {
    font-size: 1.5rem;
    font-weight: 600;
    color: #ffffff;
+   margin-right: auto; /* Empurra o botão da IA para a direita */
   }
   main {
    flex: 1;
@@ -142,7 +142,7 @@
    margin-left: 0.5rem;
   }
   .button {
-   width: 100%;
+   /* width: 100%; Removido para permitir botões de largura automática */
    padding: 0.75rem 1rem;
    border-radius: 6px;
    color: #ffffff;
@@ -151,7 +151,7 @@
    border: none;
    cursor: pointer;
    transition: background-color 0.2s ease;
-   display: flex;
+   display: inline-flex; /* Mudado para inline-flex para largura automática */
    align-items: center;
    justify-content: center;
    gap: 0.5rem;
@@ -207,8 +207,8 @@
   tbody tr:hover {
    background-color: #4a5568;
   }
-  /* Inputs de busca no cabeçalho */
-  .search-input {
+  /* Inputs de busca no cabeçalho e outros inputs */
+  .search-input, input[type="password"], textarea {
    width: 100%;
    padding: 0.5rem;
    border: 1px solid #4a5568;
@@ -217,15 +217,20 @@
    background-color: #1a202c;
    color: #e2e8f0;
    transition: border-color 0.2s ease, background-color 0.2s ease;
+   box-sizing: border-box; /* Para que padding não aumente a largura total */
   }
-  .search-input:focus {
+  .search-input:focus, input[type="password"]:focus, textarea:focus {
    border-color: #3b82f6;
    outline: none;
    background-color: #222938;
   }
-  .search-input::placeholder {
+  .search-input::placeholder, input[type="password"]::placeholder, textarea::placeholder {
    color: #718096;
   }
+  textarea {
+      resize: vertical; /* Permite redimensionamento vertical */
+  }
+
   /* Estilos para Controles do DataTables */
   .dataTables_wrapper {
    color: #a0aec0;
@@ -301,7 +306,7 @@
    border-color: #4a5568;
    color: #718096 !important; /* Cor do texto desabilitado */
    cursor: not-allowed;
-   cursor: default; /* Cursor padrão para desabilitado */
+   /* cursor: default;  Cursor padrão para desabilitado - not-allowed é mais claro */
   }
   /* Estilos para Pesquisa Avançada */
   .multi-search-row {
@@ -313,7 +318,7 @@
   .multi-search-row .column-select {
    flex: 0 0 150px; /* Largura fixa para o select de coluna */
   }
-  .multi-search-row .search-input {
+  .multi-search-row .search-input { /* Mantido para quando o dropdown não é usado */
    flex-grow: 1; /* Campo de busca ocupa o espaço restante */
   }
   .multi-search-row .remove-field {
@@ -490,25 +495,29 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.5); /* Fundo semi-transparente */
+  background-color: rgba(0, 0, 0, 0.65); /* Fundo semi-transparente mais escuro */
   z-index: 10000; /* Garante que fique por cima de outros elementos */
   display: flex;
   justify-content: center;
   align-items: center;
   color: white;
+  backdrop-filter: blur(3px); /* Efeito de blur no fundo */
 }
 
 .loader-content {
-  background-color: #333;
-  padding: 20px 30px;
+  background-color: #2d3748; /* Mesma cor de .card */
+  padding: 25px 35px;
   border-radius: 8px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  box-shadow: 0 5px 20px rgba(0,0,0,0.4);
   text-align: center;
+  border: 1px solid #4a5568;
 }
 
 .loader-content p {
   margin: 0;
-  font-size: 1.2em;
+  font-size: 1.1em;
+  font-weight: 500;
+  color: #e2e8f0;
 }
 
 /* Estilização da scrollbar para navegadores baseados em WebKit (Chrome, Edge, Safari) */
@@ -616,22 +625,108 @@ html {
     background-color: transparent !important; /* Sem cor de fundo ou hover */
 }
 
-/* Ajustes herdados do seu CSS para a linha de multi-busca, se necessário adaptá-los:
-   Lembre-se que .custom-dropdown-container agora também deve ter flex-grow:1
-   e min-width:150px como os outros inputs na .multi-search-row
-*/
 .multi-search-row .column-select,
-.multi-search-row .search-input, /* Oculto quando o custom-dropdown está ativo */
+.multi-search-row .search-input,
 .multi-search-row .custom-dropdown-container {
     flex-grow: 1;
-    min-width: 150px; /* Garante um tamanho mínimo razoável */
+    min-width: 150px;
 }
 
 .multi-search-row .column-select {
-    flex-grow: 0.5; /* O select da coluna pode ser um pouco menor */
-    min-width: 120px; /* Ajuste conforme o texto das colunas */
-    /* A altura dos selects é definida globalmente no seu CSS para 33px */
-    /* Para consistência, o .custom-dropdown-text-input terá altura baseada no padding/font-size */
-    /* Se quiser altura EXATA igual aos selects, adicione height e ajuste padding: */
-    /* height: 33px; padding-top: 0; padding-bottom: 0; display: flex; align-items: center; */
+    flex-grow: 0.5;
+    min-width: 120px;
+}
+
+/* Estilos para Modal da API da IA - Reutilizando e adaptando existentes */
+.modal {
+    position: fixed;
+    z-index: 20000; /* Acima do loadingOverlay */
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.7); /* Mais escuro que o loading overlay */
+    display: none; /* Controlado por JS - use 'flex' para mostrar e centralizar */
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(5px);
+}
+
+.modal.hidden { /* Adiciona esta classe para controle via JS, se não usar display:none direto */
+    display: none !important;
+}
+
+.modal-content {
+    background-color: #2d3748; /* Cor de .card */
+    margin: auto;
+    padding: 25px 30px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 550px; /* Um pouco maior para o conteúdo da API */
+    box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+    border: 1px solid #4a5568;
+    position: relative;
+    color: #e2e8f0; /* Texto claro */
+}
+.modal-content h3 {
+    color: #ffffff;
+    margin-bottom: 1rem;
+    font-size: 1.3em;
+}
+.modal-content p {
+    margin-bottom: 0.8rem;
+    font-size: 0.95em;
+    color: #cbd5e0;
+}
+
+.close-button {
+    color: #a0aec0;
+    /* float: right; Removido para melhor controle com position absolute */
+    font-size: 28px;
+    font-weight: bold;
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    transition: color 0.2s ease;
+}
+
+.close-button:hover,
+.close-button:focus {
+    color: #ffffff;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.warning-text {
+    background-color: rgba(255, 193, 7, 0.1); /* Amarelo de warning com transparência */
+    color: #ffca2c; /* Texto amarelo */
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    padding: 10px 15px;
+    border-radius: 6px;
+    font-size: 0.9em;
+    margin: 15px 0;
+}
+.warning-text strong {
+    color: #ffd54f; /* Destaque para o strong */
+}
+
+/* Ajuste para o botão de salvar chave no modal da IA ficar com 100% de largura */
+#saveAiApiKeyButton {
+    width: 100%;
+}
+#aiApiKeyMessage.success {
+    color: #4caf50; /* Verde sucesso */
+}
+#aiApiKeyMessage.error {
+    color: #f44336; /* Vermelho erro */
+}
+
+/* Indicador de Carregamento da IA */
+#aiLoadingIndicator:not(.hidden) { /* Estilo para quando não está hidden */
+    color: #a0aec0;
+    padding: 5px 0;
+}
+.hidden {
+    display: none !important;
 }
