@@ -617,30 +617,32 @@ html {
     min-width: 120px;
 }
 
-/* === ESTILOS PARA MODAL DA API DA IA (CORRIGIDO) === */
+/* Estilo base para todos os modais (overlay) */
 .modal {
     position: fixed;
-    z-index: 20000;
+    z-index: 20000; /* Alto z-index para ficar sobre outros elementos */
     left: 0;
     top: 0;
     width: 100%;
     height: 100%;
-    overflow: auto;
-    background-color: rgba(0,0,0,0.7);
+    overflow: auto; /* Permite scroll no overlay se o conteúdo do modal for muito grande e não tiver scroll próprio */
+    background-color: rgba(0,0,0,0.7); /* Fundo escuro semi-transparente */
     display: none; /* PADRÃO: ESCONDIDO */
-    justify-content: center;
-    align-items: center;
-    backdrop-filter: blur(5px);
+    /* justify-content e align-items serão tratados pelo modal específico se necessário */
+    backdrop-filter: blur(5px); /* Efeito de blur no fundo */
 }
 
-/* CLASSE PARA MOSTRAR O MODAL */
+/* Classe para MOSTRAR qualquer modal */
 .modal.is-active {
-    display: flex !important; /* Garante que sobrescreva o display:none base */
+    display: flex !important; /* Usar flex para que justify/align (se usados no filho) funcionem */
+    /* Se o modal-content for posicionado absolutamente/fixed, 
+       o display:flex no .modal pai ainda é útil para o overlay ocupar a tela */
 }
 
-.modal-content {
+/* Conteúdo genérico de modal (se você tiver outros modais centralizados) */
+.modal-content-centered { /* Você pode usar esta classe para modais que devem ser centralizados */
     background-color: #2d3748;
-    margin: auto;
+    margin: auto; /* Centraliza o modal */
     padding: 25px 30px;
     border-radius: 8px;
     width: 90%;
@@ -650,21 +652,42 @@ html {
     position: relative;
     color: #e2e8f0;
 }
-.modal-content h3 {
+
+
+/* Estilos específicos para o MODAL DA API DA IA (#aiApiKeyModal) */
+#aiApiKeyModal .modal-content { /* Direcionando o .modal-content dentro do #aiApiKeyModal */
+    position: fixed; /* Posição fixa no canto da tela */
+    top: 20px;
+    right: 20px;
+    width: auto; /* Largura se ajusta ao conteúdo */
+    min-width: 320px; /* Largura mínima para legibilidade */
+    max-width: 450px; /* Largura máxima */
+    background-color: #2d3748;
+    padding: 20px 25px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    border: 1px solid #4a5568;
+    color: #e2e8f0;
+    /* Importante: remove margin:auto se estava em .modal-content genérico
+       e não estamos mais usando flex do .modal pai para centralizar este modal específico */
+    margin: 0; 
+}
+
+#aiApiKeyModal .modal-content h3 {
     color: #ffffff;
     margin-top: 0;
     margin-bottom: 1rem;
-    font-size: 1.3em;
+    font-size: 1.2em; /* Um pouco menor para um painel de canto */
 }
-.modal-content p {
+#aiApiKeyModal .modal-content p {
     margin-bottom: 0.8rem;
-    font-size: 0.95em;
+    font-size: 0.9em; /* Um pouco menor */
     color: #cbd5e0;
 }
-.modal-content p:last-of-type {
-    margin-bottom: 1rem;
+#aiApiKeyModal .modal-content p:last-of-type {
+    margin-bottom: 1rem; 
 }
-.modal-content input[type="password"] {
+#aiApiKeyModal .modal-content input[type="password"] {
     width: 100%;
     padding: 10px;
     margin-bottom: 15px;
@@ -676,58 +699,61 @@ html {
     box-sizing: border-box;
 }
 
-.close-button {
+#aiApiKeyModal .close-button { /* Estilo do botão fechar dentro deste modal específico */
     color: #a0aec0;
-    font-size: 28px;
+    font-size: 24px; /* Um pouco menor */
     font-weight: bold;
     position: absolute;
-    top: 10px;
-    right: 20px;
+    top: 8px; /* Ajustado para o novo padding */
+    right: 15px; /* Ajustado para o novo padding */
     transition: color 0.2s ease;
     cursor: pointer;
 }
 
-.close-button:hover,
-.close-button:focus {
+#aiApiKeyModal .close-button:hover,
+#aiApiKeyModal .close-button:focus {
     color: #ffffff;
     text-decoration: none;
 }
 
-.warning-text {
+#aiApiKeyModal .warning-text {
     background-color: rgba(255, 193, 7, 0.1);
     color: #ffca2c;
     border: 1px solid rgba(255, 193, 7, 0.3);
-    padding: 10px 15px;
+    padding: 8px 12px; /* Um pouco menor */
     border-radius: 6px;
-    font-size: 0.9em;
-    margin: 15px 0;
+    font-size: 0.85em; /* Um pouco menor */
+    margin: 10px 0;
 }
-.warning-text strong {
+#aiApiKeyModal .warning-text strong {
     color: #ffd54f;
 }
 
-#saveAiApiKeyButton {
+#aiApiKeyModal #saveAiApiKeyButton {
     width: 100%;
     margin-top: 10px;
+    padding: 0.6rem 1rem; /* Padding do botão um pouco menor */
+    font-size: 0.85em;
 }
-#aiApiKeyMessage {
-    font-size:0.9em;
-    margin-top:10px;
-    min-height: 1.2em;
+#aiApiKeyModal #aiApiKeyMessage {
+    font-size:0.85em;
+    margin-top:8px;
+    min-height: 1.1em;
 }
-#aiApiKeyMessage.success {
+#aiApiKeyModal #aiApiKeyMessage.success {
     color: #4caf50;
 }
-#aiApiKeyMessage.error {
+#aiApiKeyModal #aiApiKeyMessage.error {
     color: #f44336;
 }
 
-/* Classe genérica .hidden para outros elementos */
+
+/* A classe .hidden genérica para outros elementos permanece como está */
 .hidden {
     display: none !important;
 }
-#aiLoadingIndicator:not(.hidden) {
+#aiLoadingIndicator:not(.hidden) { /* Se o loading indicator da IA for separado do modal */
     color: #a0aec0;
     padding: 5px 0;
 }
-/* === FIM DOS ESTILOS PARA MODAL DA API DA IA === */
+/* === FIM DOS ESTILOS PARA MODAL DA API DA IA (FIXO NO CANTO) === */
