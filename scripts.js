@@ -641,9 +641,9 @@ $(document).ready(function() {
     }
 
     // ===========================================================
-    // FUNCIONALIDADE DE IA - INÍCIO
+    // FUNCIONALIDADE DE IA - INÍCIO (Configurado para Google Gemini)
     // ===========================================================
-    const AI_API_KEY_STORAGE_KEY = 'licenseAiApiKey_v1';
+    const AI_API_KEY_STORAGE_KEY = 'licenseAiApiKey_v1_google'; // Chave específica para Google
 
     const $manageAiApiKeyButton = $('#manageAiApiKeyButton');
     const $aiApiKeyModal = $('#aiApiKeyModal');
@@ -666,11 +666,11 @@ $(document).ready(function() {
         if (getAiApiKey()) {
             $manageAiApiKeyButton.text('API IA Config.');
             $manageAiApiKeyButton.css('background-color', '#28a745');
-            $manageAiApiKeyButton.attr('title', 'Chave da API da IA configurada. Clique para alterar.');
+            $manageAiApiKeyButton.attr('title', 'Chave da API da IA (Google Gemini) configurada. Clique para alterar.');
         } else {
             $manageAiApiKeyButton.text('Configurar API IA');
-            $manageAiApiKeyButton.css('background-color', ''); // Reverte para o estilo original da classe .button-blue
-            $manageAiApiKeyButton.attr('title', 'Configurar chave da API da IA para análise.');
+            $manageAiApiKeyButton.css('background-color', '');
+            $manageAiApiKeyButton.attr('title', 'Configurar chave da API da IA (Google Gemini) para análise.');
         }
     }
    
@@ -694,7 +694,7 @@ $(document).ready(function() {
         const key = $aiApiKeyInput.val().trim();
         if (key) {
             localStorage.setItem(AI_API_KEY_STORAGE_KEY, key);
-            $aiApiKeyMessage.text('Chave da API da IA salva!').removeClass('error').addClass('success');
+            $aiApiKeyMessage.text('Chave da API da IA (Google Gemini) salva!').removeClass('error').addClass('success');
             updateAiApiKeyStatusDisplay();
             setTimeout(() => {
                 $aiApiKeyMessage.text('').removeClass('success error');
@@ -705,125 +705,179 @@ $(document).ready(function() {
         }
     });
 
-    // --- Interação com a IA (Configurado para OpenAI/ChatGPT) ---
+    // --- Interação com a IA (Configurado para Google Gemini) ---
     $askAiButton.on('click', async function() {
-        const apiKey = getAiApiKey();
+        const apiKey = getAiApiKey(); // Esta é a SUA CHAVE API DO GOOGLE GEMINI
         if (!apiKey) {
-            alert('Por favor, configure sua chave de API da OpenAI (ChatGPT) primeiro.');
+            alert('Por favor, configure sua chave de API do Google Gemini primeiro.');
             $aiApiKeyModal.addClass('is-active');
             return;
         }
 
         const userQuestion = $aiQuestionInput.val().trim();
         let promptContext = "";
-        let systemMessage = `Você é um assistente especialista em análise de licenciamento Microsoft 365. Analise os dados fornecidos e responda à pergunta do usuário ou forneça insights gerais se nenhuma pergunta específica for feita. Seja conciso e foque em observações acionáveis. Os dados de licença de usuários são fornecidos em formato JSON. Quando fornecer uma resposta, use formatação Markdown simples (negrito, itálico, listas). Não inclua saudações ou despedidas genéricas, vá direto ao ponto da análise.`;
+        // Ajuste o systemMessage para ser mais adequado ao Gemini, se necessário, ou mantenha genérico.
+        let systemMessage = `Você é um assistente especialista em análise de licenciamento Microsoft 365. Use o contexto fornecido (estatísticas agregadas e uma pequena amostra de dados, se houver) para responder à pergunta do usuário ou fornecer insights gerais sobre os dados de licença. Seja conciso, foque em observações acionáveis e use formatação Markdown simples (negrito, itálico, listas) para clareza. Não inclua saudações ou despedidas.`;
+
 
         if (allData && allData.length > 0) {
             const totalUsers = allData.length;
-            const licenseCounts = {};
-            allData.forEach(user => {
-                (user.Licenses || []).forEach(lic => {
-                    licenseCounts[lic.LicenseName] = (licenseCounts[lic.LicenseName] || 0) + 1;
-                });
-            });
-            const topLicenses = Object.entries(licenseCounts)
-                .sort(([,a],[,b]) => b-a)
-                .slice(0, 5)
-                .map(([name, count]) => `${name}: ${count} atribuições`)
-                .join('\n  - ');
-           
-            promptContext = `Resumo dos dados de licença:\n- Total de Usuários: ${totalUsers}\n- Principais Licenças (Top 5 por atribuição):\n  - ${topLicenses}`;
-            
-            let sampleDataForPrompt = [];
-            const maxSample = 5;
-            if (allData.length > 0) {
-                sampleDataForPrompt = allData.slice(0, maxSample).map(u => ({
-                    DisplayName: u.DisplayName, 
-                    JobTitle: u.JobTitle, 
-                    OfficeLocation: u.OfficeLocation,
-                    Licenses: (u.Licenses || []).map(l => l.LicenseName)
-                }));
-            }
-            
-            if (allData.length > maxSample) {
-                promptContext += `\n\nNota: Os dados completos contêm ${allData.length} usuários. Uma pequena amostra de até ${maxSample} usuários é fornecida abaixo para detalhamento, focando em nome, cargo, local e licenças.`;
-            }
-            promptContext += `\n\nAmostra de Dados (Nome, Cargo, Local e Licenças):\n${JSON.stringify(sampleDataForPrompt, null, 2)}`;
+            const licenseMap = new Map();
+            let usersWithMultipleHighValueLicenses = 0;
+            const highValueLicenseKeywords = ['E5', 'Premium', 'Copilot', 'P2'];
+            const departmentLicenseCounts = {};
 
+            allData.forEach(user => {
+                let highValueLicenseCount = 0;
+                const location = user.OfficeLocation || "Não Especificado";
+                if (!departmentLicenseCounts[location]) {
+                    departmentLicenseCounts[location] = new Map();
+                }
+
+                (user.Licenses || []).forEach(lic => {
+                    const licName = lic.LicenseName;
+                    licenseMap.set(licName, (licenseMap.get(licName) || 0) + 1);
+                    
+                    const currentDeptLicMap = departmentLicenseCounts[location];
+                    currentDeptLicMap.set(licName, (currentDeptLicMap.get(licName) || 0) + 1);
+
+                    if (highValueLicenseKeywords.some(keyword => licName.toLowerCase().includes(keyword.toLowerCase()))) {
+                        highValueLicenseCount++;
+                    }
+                });
+                if (highValueLicenseCount > 1) {
+                    usersWithMultipleHighValueLicenses++;
+                }
+            });
+
+            const uniqueLicenseCount = licenseMap.size;
+            const topLicensesOverall = [...licenseMap.entries()]
+                .sort(([,a],[,b]) => b-a)
+                .slice(0, 10)
+                .map(([name, count]) => `  - ${name}: ${count} atribuições`)
+                .join('\n');
+            
+            let departmentSummary = "\nDistribuição de Licenças por Localização/Departamento (Top 3 locais com mais usuários):\n";
+            const sortedDepartments = Object.entries(departmentLicenseCounts)
+                .map(([dept, licMap]) => ({ name: dept, userCount: new Set(allData.filter(u => (u.OfficeLocation || "Não Especificado") === dept).map(u => u.Id)).size, licMap: licMap }))
+                .sort((a,b) => b.userCount - a.userCount)
+                .slice(0, 3);
+            
+            sortedDepartments.forEach(deptInfo => {
+                departmentSummary += `  Local/Depto: ${deptInfo.name} (${deptInfo.userCount} usuários)\n`;
+                const topDeptLicenses = [...deptInfo.licMap.entries()]
+                    .sort(([,a],[,b]) => b-a)
+                    .slice(0,3)
+                    .map(([name, count]) => `    - ${name}: ${count}`)
+                    .join('\n');
+                departmentSummary += `${topDeptLicenses}\n`;
+            });
+
+            promptContext = `Análise do Ambiente de Licenciamento Microsoft 365:\n- Total de Usuários Analisados: ${totalUsers}\n- Número de Tipos de Licenças Únicas Encontradas: ${uniqueLicenseCount}\n- Usuários com Múltiplas Licenças de Alto Valor (ex: E5, Premium, Copilot, P2): ${usersWithMultipleHighValueLicenses}\n- Distribuição das Top 10 Licenças Mais Atribuídas (Geral):\n${topLicensesOverall}\n${departmentSummary}\nCom base nestas estatísticas agregadas, e não em dados individuais de usuários, responda à pergunta ou forneça insights.`;
+            
         } else {
             $aiResponseArea.text('Não há dados de licença carregados para analisar.');
             return;
         }
 
-        let userQueryForAI = userQuestion || "Com base no resumo e na amostra de dados de licença fornecidos, quais são os principais insights, possíveis otimizações de custos ou anomalias que você pode identificar?";
+        let userQueryForAI = userQuestion || "Com base nas estatísticas de licença fornecidas, quais são os principais insights, possíveis otimizações de custos ou anomalias que você pode identificar?";
        
-        // === OpenAI/ChatGPT API Configuration ===
-        const AI_PROVIDER_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
+        // === Google Gemini API Configuration ===
+        // Use o modelo mais recente e eficiente, como gemini-1.5-flash-latest
+        // Ou gemini-pro para um modelo mais robusto, se preferir (pode ter custos diferentes no tier pago)
+        const GEMINI_MODEL = "gemini-1.5-flash-latest"; 
+        const AI_PROVIDER_ENDPOINT_BASE = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+        const finalEndpoint = `${AI_PROVIDER_ENDPOINT_BASE}?key=${apiKey}`; // Chave da API na URL
 
         $aiLoadingIndicator.removeClass('hidden');
         $askAiButton.prop('disabled', true);
-        $aiResponseArea.html('Analisando com IA... <i class="fas fa-spinner fa-spin"></i>');
+        $aiResponseArea.html('Analisando com IA (Google Gemini)... <i class="fas fa-spinner fa-spin"></i>');
 
         try {
             const requestHeaders = {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}` // Chave da API da OpenAI
             };
+
+            // O prompt combinado para o Gemini
+            const fullPromptForGemini = `${systemMessage}\n\nContexto dos Dados (Estatísticas Agregadas):\n${promptContext}\n\nPergunta do Usuário/Tarefa: ${userQueryForAI}`;
 
             const requestBody = {
-                model: "gpt-3.5-turbo", // Ou "gpt-4o", "gpt-4", etc. Verifique os modelos disponíveis.
-                messages: [
-                    { role: "system", content: systemMessage },
-                    { role: "user", content: `${promptContext}\n\nPergunta do usuário: ${userQueryForAI}` }
-                ],
-                max_tokens: 800, // Ajuste conforme a necessidade de comprimento da resposta
-                temperature: 0.5  // 0.0 para mais determinístico, até 1.0 para mais criativo
+              contents: [{
+                // "role": "user", // Opcional para single-turn, mas bom para clareza
+                parts: [{ "text": fullPromptForGemini }]
+              }],
+              generationConfig: { // Opcional, mas recomendado para controlar a saída
+                "maxOutputTokens": 1024, // Ajuste conforme necessário (limite do Gemini Flash é alto)
+                "temperature": 0.4,      // Menor para respostas mais factuais/consistentes
+                "topP": 0.95,            // Padrão
+                "topK": 40              // Padrão
+              }
             };
+            
+            console.log("Enviando para Google Gemini API:", JSON.stringify(requestBody, null, 2));
+            console.log("Endpoint:", finalEndpoint);
 
-            const response = await fetch(AI_PROVIDER_ENDPOINT, {
+
+            const response = await fetch(finalEndpoint, {
                 method: 'POST',
                 headers: requestHeaders,
                 body: JSON.stringify(requestBody)
             });
+            
+            const responseBodyText = await response.text();
+            let data;
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ // Tenta parsear JSON, senão pega texto
-                     message: `Erro HTTP ${response.status} - ${response.statusText}` 
-                }));
-                let detailedMessage = errorData.error?.message || JSON.stringify(errorData);
-                console.error("Erro da API da OpenAI:", response.status, detailedMessage);
-                throw new Error(`Erro da API OpenAI (${response.status}): ${detailedMessage}`);
+            try {
+                data = JSON.parse(responseBodyText);
+            } catch (e) {
+                console.error("Falha ao parsear JSON da resposta da API:", responseBodyText);
+                throw new Error(`Resposta da API não é um JSON válido. Status: ${response.status}. Resposta: ${responseBodyText.substring(0, 500)}...`);
             }
 
-            const data = await response.json();
-            console.log("Resposta completa da API da OpenAI:", data);
+
+            if (!response.ok) {
+                let detailedMessage = data.error?.message || JSON.stringify(data.error) || responseBodyText;
+                console.error("Erro da API Google Gemini:", response.status, detailedMessage);
+                throw new Error(`Erro da API Google Gemini (${response.status}): ${detailedMessage}`);
+            }
+
+            console.log("Resposta completa da API Google Gemini:", data);
 
             let aiTextResponse = "Não foi possível extrair uma resposta da IA. Verifique o console.";
-            if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
-                aiTextResponse = data.choices[0].message.content.trim();
+            if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text) {
+               aiTextResponse = data.candidates[0].content.parts.map(part => part.text).join("").trim(); // Concatena todas as partes
+            } else if (data.candidates && data.candidates[0] && data.candidates[0].finishReason) {
+                // Se houver um finishReason mas não houver texto, pode ser um bloqueio de segurança ou outro problema
+                aiTextResponse = `A IA finalizou o processamento com o motivo: ${data.candidates[0].finishReason}.`;
+                if(data.promptFeedback && data.promptFeedback.blockReason) {
+                    aiTextResponse += ` Feedback do prompt: ${data.promptFeedback.blockReason}.`;
+                }
+                 console.warn("Resposta da IA pode estar bloqueada ou incompleta:", data);
             }
             
             function simpleMarkdownToHtml(mdText) {
                 if (typeof mdText !== 'string') return '';
-                // Escapa HTML básico para segurança
                 let html = escapeHtml(mdText);
-                // Converte quebras de linha
-                html = html.replace(/\n/g, '<br>');
-                // Negrito: **texto** ou __texto__
+                html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+                html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+                html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
                 html = html.replace(/\*\*(.*?)\*\*|__(.*?)__/g, '<strong>$1$2</strong>');
-                // Itálico: *texto* ou _texto_
                 html = html.replace(/\*(.*?)\*|_(.*?)_/g, '<em>$1$2</em>');
-                // Listas não ordenadas (simples, cada item em uma nova linha começando com - ou *)
-                html = html.replace(/^(?:<br>)?\s*[-*]\s+(.*)/gm, (match, item) => `<li>${item.trim()}</li>`);
-                // Envolve blocos de <li> em <ul>, corrigindo múltiplos <ul>
-                html = html.replace(/<li>.*?<\/li>(?:\s*<br>\s*<li>.*?<\/li>)*/g, (match) => `<ul>${match}</ul>`);
-                html = html.replace(/<\/ul>\s*<ul>/g, ''); // Junta listas adjacentes
+                
+                html = html.replace(/^(?:<br>)?\s*[-*+]\s+(.*(?:<br>\s*[-*+]\s+.*)*)/gm, (match, listItems) => {
+                    const items = listItems.split(/<br>\s*[-*+]\s+/);
+                    return '<ul>' + items.map(item => `<li>${item.trim()}</li>`).join('') + '</ul>';
+                });
+                html = html.replace(/<\/ul>\s*<br>\s*<ul>/g, '');
+                html = html.replace(/<\/ul><ul>/g, ''); // Outra variação de junção de listas
+
+                html = html.replace(/\n/g, '<br>');
                 return html;
             }
             $aiResponseArea.html(simpleMarkdownToHtml(aiTextResponse));
 
         } catch (error) {
-            console.error('Erro ao chamar ou processar resposta da API da IA:', error);
+            console.error('Erro ao chamar ou processar resposta da API Google Gemini:', error);
             $aiResponseArea.html(`<strong>Erro ao obter análise da IA:</strong><br>${escapeHtml(error.message)}`);
         } finally {
             $aiLoadingIndicator.addClass('hidden');
