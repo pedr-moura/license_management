@@ -639,21 +639,17 @@ $(document).ready(function() {
         $('#searchCriteria').text('Error loading data.');
     }
 
-      // ===========================================================
-    // FUNCIONALIDADE DE IA - (Configurado para Google Gemini com Processamento em Blocos)
+   // ===========================================================
+    // FUNCIONALIDADE DE IA - (Input da API Key via prompt())
     // ===========================================================
-    const AI_API_KEY_STORAGE_KEY = 'licenseAiApiKey_v1_google_chunked';
+    const AI_API_KEY_STORAGE_KEY = 'licenseAiApiKey_v1_google_prompt'; // Nova chave para localStorage
 
     const $manageAiApiKeyButton = $('#manageAiApiKeyButton');
-    const $aiApiKeyModal = $('#aiApiKeyModal');
-    const $closeAiModalButton = $('#closeAiModalButton');
-    const $aiApiKeyInput = $('#aiApiKeyInput');
-    const $saveAiApiKeyButton = $('#saveAiApiKeyButton');
-    const $aiApiKeyMessage = $('#aiApiKeyMessage');
+    // Variáveis do modal HTML removidas: $aiApiKeyModal, $closeAiModalButton, $aiApiKeyInput, $saveAiApiKeyButton, $aiApiKeyMessage
 
-    const $startAiProcessingButton = $('#startAiProcessingButton'); // Novo botão
-    const $aiProcessingStatus = $('#aiProcessingStatus');       // Novo status
-    const $aiInteractionArea = $('#aiInteractionArea');         // Área de pergunta/resposta
+    const $startAiProcessingButton = $('#startAiProcessingButton');
+    const $aiProcessingStatus = $('#aiProcessingStatus');
+    const $aiInteractionArea = $('#aiInteractionArea');
 
     const $askAiButton = $('#askAiButton');
     const $aiQuestionInput = $('#aiQuestionInput');
@@ -661,32 +657,75 @@ $(document).ready(function() {
     const $aiLoadingIndicator = $('#aiLoadingIndicator');
 
     let aiConversationHistory = []; 
-    let blockSummaries = []; // <<< NOVO: Para armazenar os resumos de cada bloco
+    let blockSummaries = [];
     let totalChunks = 0;
     let chunksProcessed = 0;
 
-    // --- Constantes para processamento em blocos ---
-    const USERS_PER_CHUNK = 2500; // Número de usuários por bloco
-                                 // (2500 usuários * ~50 tokens/usuário = 125k tokens. Gemini Flash deve aguentar, Pro com folga)
-    const MAX_TOKENS_PER_CHUNK_ANALYSIS = 2048; // Tokens para a RESPOSTA da IA ao analisar cada chunk
-    const MAX_TOKENS_FINAL_QUESTION = 2048; // Tokens para a RESPOSTA da IA à pergunta final do usuário
+    const USERS_PER_CHUNK = 2500; 
+    const MAX_TOKENS_PER_CHUNK_ANALYSIS = 2048;
+    const MAX_TOKENS_FINAL_QUESTION = 2048;
 
-    // ... (funções getAiApiKey, updateAiApiKeyStatusDisplay, e listeners do modal como antes) ...
-    function getAiApiKey() { /* ... como antes ... */ }
-    function updateAiApiKeyStatusDisplay() { /* ... como antes ... */ }
-    $manageAiApiKeyButton.on('click', function() { /* ... como antes ... */ });
-    $closeAiModalButton.on('click', function() { /* ... como antes ... */ });
-    $aiApiKeyModal.on('click', function(event) { /* ... como antes ... */ });
-    $saveAiApiKeyButton.on('click', function() { /* ... como antes ... */ });
+
+    // --- Gerenciamento da Chave API da IA via prompt() ---
+    function getAiApiKey() {
+        return localStorage.getItem(AI_API_KEY_STORAGE_KEY);
+    }
+
+    function updateAiApiKeyStatusDisplay() {
+        if (getAiApiKey()) {
+            $manageAiApiKeyButton.text('API IA Config.');
+            $manageAiApiKeyButton.css('background-color', '#28a745'); // Verde
+            $manageAiApiKeyButton.attr('title', 'Chave da API da IA (Google Gemini) configurada. Clique para alterar.');
+        } else {
+            $manageAiApiKeyButton.text('Configurar API IA');
+            $manageAiApiKeyButton.css('background-color', ''); // Volta à cor original
+            $manageAiApiKeyButton.attr('title', 'Configurar chave da API da IA (Google Gemini) para análise.');
+        }
+    }
+   
+    function handleApiKeyInputViaPrompt() {
+        const currentKey = getAiApiKey() || "";
+        const newKey = window.prompt("Por favor, insira sua chave de API do Google Gemini (deixe em branco e cancele para não alterar):", currentKey);
+
+        if (newKey === null) { // Usuário clicou em Cancelar
+            alert("Configuração da chave da API cancelada.");
+            updateAiApiKeyStatusDisplay(); // Garante que o status do botão reflita a chave existente (ou nenhuma)
+            return false; // Indica que a configuração foi cancelada ou falhou
+        } else if (newKey.trim() === "" && currentKey !== "") { // Usuário apagou a chave e clicou OK
+            if (confirm("Você tem certeza que deseja remover a chave da API salva?")) {
+                localStorage.removeItem(AI_API_KEY_STORAGE_KEY);
+                alert("Chave da API removida.");
+                updateAiApiKeyStatusDisplay();
+            } else {
+                 alert("Remoção da chave cancelada. A chave anterior foi mantida.");
+            }
+            return false;
+        } else if (newKey.trim() !== "") { // Usuário inseriu uma nova chave
+            localStorage.setItem(AI_API_KEY_STORAGE_KEY, newKey.trim());
+            alert("Chave da API da IA (Google Gemini) salva!");
+            updateAiApiKeyStatusDisplay();
+            return true; // Indica que a chave foi salva com sucesso
+        } else { // Usuário deixou em branco e clicou OK, sem chave anterior
+            alert("Nenhuma chave inserida. A configuração permanece inalterada.");
+            updateAiApiKeyStatusDisplay();
+            return false;
+        }
+    }
+
+    $manageAiApiKeyButton.on('click', function() {
+        handleApiKeyInputViaPrompt();
+    });
 
 
     // --- Lógica de Processamento em Blocos e Interação com a IA ---
-
     $startAiProcessingButton.on('click', async function() {
-        const apiKey = getAiApiKey();
+        let apiKey = getAiApiKey();
         if (!apiKey) {
-            alert('Por favor, configure sua chave de API do Google Gemini primeiro.');
-            $aiApiKeyModal.addClass('is-active');
+            alert('Por favor, configure sua chave de API do Google Gemini primeiro clicando no botão "Configurar API IA".');
+            // Opcionalmente, chamar handleApiKeyInputViaPrompt() diretamente:
+            // if (!handleApiKeyInputViaPrompt()) return; // Se o usuário cancelar, para aqui
+            // apiKey = getAiApiKey(); // Pega a chave recém-inserida
+            // if (!apiKey) return; // Para se ainda não houver chave
             return;
         }
         if (!allData || allData.length === 0) {
@@ -694,15 +733,18 @@ $(document).ready(function() {
             return;
         }
 
+        // ... (resto da lógica do $startAiProcessingButton.on('click') como na versão anterior)
+        // ... (calcula chunks, itera, chama a API para cada chunk, armazena blockSummaries)
+        // ... (habilita a área de interação no final)
         $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Processando Blocos...');
-        $aiInteractionArea.addClass('hidden'); // Esconde área de pergunta final
-        aiConversationHistory = []; // Reinicia histórico para um novo processamento
+        $aiInteractionArea.addClass('hidden'); 
+        aiConversationHistory = []; 
         blockSummaries = [];
         chunksProcessed = 0;
         totalChunks = Math.ceil(allData.length / USERS_PER_CHUNK);
         $aiProcessingStatus.text(`Iniciando processamento de ${totalChunks} blocos de dados...`);
 
-        const GEMINI_MODEL_TO_USE = "gemini-1.5-flash-latest"; // Use "gemini-1.5-pro-latest" se precisar de mais contexto por chunk ou respostas mais longas
+        const GEMINI_MODEL_TO_USE = "gemini-1.5-flash-latest"; 
         const AI_PROVIDER_ENDPOINT_BASE = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_TO_USE}:generateContent`;
         
         for (let i = 0; i < totalChunks; i++) {
@@ -713,11 +755,8 @@ $(document).ready(function() {
             const endIndex = startIndex + USERS_PER_CHUNK;
             const currentChunkData = allData.slice(startIndex, endIndex);
 
-            const chunkSampleForAI = currentChunkData.map(u => ({ // Simplifica os dados do chunk
-                DisplayName: u.DisplayName,
-                OfficeLocation: u.OfficeLocation,
-                JobTitle: u.JobTitle,
-                Licenses: (u.Licenses || []).map(l => l.LicenseName)
+            const chunkSampleForAI = currentChunkData.map(u => ({
+                DisplayName: u.DisplayName, OfficeLocation: u.OfficeLocation, JobTitle: u.JobTitle, Licenses: (u.Licenses || []).map(l => l.LicenseName)
             }));
 
             const systemMessageForChunk = `Você é um assistente de análise de licenças. Este é o bloco de dados ${chunksProcessed} de um total de ${totalChunks} blocos. Os dados contêm informações de aproximadamente ${USERS_PER_CHUNK} usuários (DisplayName, OfficeLocation, JobTitle, Licenses).
@@ -740,11 +779,7 @@ Seja breve e objetivo. Não faça saudações. Limite sua resposta a alguns par�
                   generationConfig: { "maxOutputTokens": MAX_TOKENS_PER_CHUNK_ANALYSIS, "temperature": 0.5 }
                 };
 
-                const response = await fetch(finalEndpoint, {
-                    method: 'POST',
-                    headers: requestHeaders,
-                    body: JSON.stringify(requestBody)
-                });
+                const response = await fetch(finalEndpoint, { method: 'POST', headers: requestHeaders, body: JSON.stringify(requestBody) });
                 const responseBodyText = await response.text();
                 let data;
                 try { data = JSON.parse(responseBodyText); } 
@@ -767,16 +802,13 @@ Seja breve e objetivo. Não faça saudações. Limite sua resposta a alguns par�
             } catch (error) {
                 console.error(`Erro ao processar bloco ${chunksProcessed}:`, error);
                 blockSummaries.push({ chunk: chunksProcessed, summary: `Erro ao processar bloco ${chunksProcessed}: ${error.message}` });
-                // Decide se quer parar em caso de erro ou continuar com os próximos blocos
-                // Por enquanto, vamos registrar o erro e continuar.
             }
-        } // Fim do loop de chunks
+        } 
 
         $aiProcessingStatus.text(`Todos os ${totalChunks} blocos foram processados! ${blockSummaries.length} resumos gerados. Agora você pode fazer perguntas sobre os dados analisados.`);
         $startAiProcessingButton.prop('disabled', false).html('<i class="fas fa-cogs"></i> Reprocessar Dados para IA');
         
-        // Prepara o histórico inicial para as perguntas do usuário
-        aiConversationHistory = []; // Limpa qualquer histórico anterior
+        aiConversationHistory = []; 
         const aggregatedSummaries = blockSummaries.map(bs => `--- INSIGHTS DO BLOCO DE DADOS ${bs.chunk} ---\n${bs.summary}`).join("\n\n");
         
         const initialSystemPromptForQuestions = `Você é um assistente especialista em análise de licenciamento Microsoft 365.
@@ -792,26 +824,27 @@ ${aggregatedSummaries}
 Agora, estou pronto para suas perguntas sobre esses dados analisados.`;
 
         aiConversationHistory.push({ "role": "user", "parts": [{ "text": initialSystemPromptForQuestions }] });
-        // Pode-se fazer uma chamada inicial para a IA apenas com este prompt para ela confirmar, ou esperar a pergunta do usuário.
-        // Por simplicidade, vamos apenas popular o histórico e habilitar a área de perguntas.
         $aiResponseArea.html("<strong>Contexto dos blocos processado e carregado.</strong><br>Por favor, faça sua pergunta sobre os dados de licença analisados.");
         $aiQuestionInput.prop('disabled', false).attr('placeholder', 'Faça sua pergunta sobre os dados analisados...');
         $askAiButton.prop('disabled', false);
         $aiInteractionArea.removeClass('hidden');
+    }); 
 
-    }); // Fim do $startAiProcessingButton.on('click')
 
-
-    $askAiButton.on('click', async function() { // Botão para perguntas APÓS processamento dos blocos
-        const apiKey = getAiApiKey();
-        if (!apiKey) { /* ... como antes ... */ return; }
+    $askAiButton.on('click', async function() {
+        let apiKey = getAiApiKey(); // Renomeado para não conflitar com a variável apiKey no escopo do click
+        if (!apiKey) {
+            alert('Por favor, configure sua chave de API do Google Gemini primeiro.');
+            if (!handleApiKeyInputViaPrompt()) return; // Tenta obter a chave via prompt
+            apiKey = getAiApiKey(); // Pega a chave recém-inserida
+            if (!apiKey) return; // Para se ainda não houver chave
+        }
 
         const userQuestion = $aiQuestionInput.val().trim();
         if (!userQuestion) {
             alert("Por favor, digite sua pergunta.");
             return;
         }
-
         if (aiConversationHistory.length === 0) {
             alert("Por favor, inicie o processamento dos dados primeiro usando o botão 'Iniciar Processamento'.");
             return;
@@ -821,7 +854,6 @@ Agora, estou pronto para suas perguntas sobre esses dados analisados.`;
         $(this).prop('disabled', true);
         $aiResponseArea.html('Analisando sua pergunta... <i class="fas fa-spinner fa-spin"></i>');
 
-        // Adiciona a pergunta atual do usuário ao histórico
         aiConversationHistory.push({ "role": "user", "parts": [{ "text": userQuestion }] });
 
         const GEMINI_MODEL_TO_USE = "gemini-1.5-flash-latest"; 
@@ -831,19 +863,13 @@ Agora, estou pronto para suas perguntas sobre esses dados analisados.`;
         try {
             const requestHeaders = { 'Content-Type': 'application/json' };
             const requestBody = {
-              contents: aiConversationHistory, // Envia o histórico completo (incluindo resumos dos blocos e perguntas anteriores)
+              contents: aiConversationHistory,
               generationConfig: { "maxOutputTokens": MAX_TOKENS_FINAL_QUESTION, "temperature": 0.5 }
             };
 
             console.log(`Enviando pergunta final para Gemini. Turnos no histórico: ${aiConversationHistory.length}`);
-            // console.log("Corpo da requisição final:", JSON.stringify(requestBody, null, 2));
 
-            const response = await fetch(finalEndpoint, {
-                method: 'POST',
-                headers: requestHeaders,
-                body: JSON.stringify(requestBody)
-            });
-            
+            const response = await fetch(finalEndpoint, { method: 'POST', headers: requestHeaders, body: JSON.stringify(requestBody) });
             const responseBodyText = await response.text();
             let data;
             try { data = JSON.parse(responseBodyText); } 
@@ -857,18 +883,15 @@ Agora, estou pronto para suas perguntas sobre esses dados analisados.`;
             let aiTextResponse = "Não foi possível extrair a resposta da IA.";
             if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
                 aiTextResponse = data.candidates[0].content.parts.map(p => p.text).join("").trim();
-                 // Adiciona a resposta da IA ao histórico
                 aiConversationHistory.push({ "role": "model", "parts": [{ "text": aiTextResponse }] });
             } else if (data.candidates && data.candidates[0]?.finishReason !== "STOP") {
                 aiTextResponse = `A IA finalizou com motivo: ${data.candidates[0].finishReason}.`;
-                 // Não adiciona ao histórico se for um erro ou bloqueio, para não poluir
             } else {
                 aiTextResponse = "A IA processou, mas não retornou texto.";
             }
-             // Limitar o tamanho do histórico (exemplo: manter últimos X turnos)
-            const MAX_HISTORY_ITEMS = 20; // Ex: 10 perguntas de usuário + 10 respostas do modelo (mais o contexto inicial dos resumos)
+            
+            const MAX_HISTORY_ITEMS = 20; 
             if (aiConversationHistory.length > MAX_HISTORY_ITEMS) {
-                // Remove os itens mais antigos, mantendo o primeiro (contexto dos resumos) e os mais recentes.
                 const itemsToRemove = aiConversationHistory.length - MAX_HISTORY_ITEMS;
                 aiConversationHistory.splice(1, itemsToRemove); 
                 console.log(`Histórico de perguntas truncado. Mantendo ${aiConversationHistory.length} itens.`);
@@ -876,12 +899,11 @@ Agora, estou pronto para suas perguntas sobre esses dados analisados.`;
 
             function simpleMarkdownToHtml(mdText) { /* ... (função como antes) ... */ }
             $aiResponseArea.html(simpleMarkdownToHtml(aiTextResponse));
-            $aiQuestionInput.val(''); // Limpa o input da pergunta
+            $aiQuestionInput.val('');
 
         } catch (error) {
             console.error('Erro ao interagir com IA para pergunta final:', error);
             $aiResponseArea.html(`<strong>Erro na análise:</strong><br>${escapeHtml(error.message)}`);
-             // Remove o último par (pergunta do usuário que falhou) do histórico
             if (aiConversationHistory.length > 0 && aiConversationHistory[aiConversationHistory.length -1].role === "user") {
                 aiConversationHistory.pop();
             }
@@ -891,7 +913,7 @@ Agora, estou pronto para suas perguntas sobre esses dados analisados.`;
         }
     });
    
-    updateAiApiKeyStatusDisplay();
+    updateAiApiKeyStatusDisplay(); // Atualiza status inicial do botão
     // ===========================================================
     // FUNCIONALIDADE DE IA - FIM
     // ===========================================================
