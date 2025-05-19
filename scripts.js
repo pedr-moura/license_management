@@ -1,6 +1,6 @@
 $(document).ready(function() {
     let table = null, allData = [], nameConflicts = new Set(), dupLicUsers = new Set();
-    const DEBOUNCE_DELAY = 350;
+    const DEBOUNCE_DELAY = 350; // Milliseconds
     let multiSearchDebounceTimer;
 
     const searchableColumnsConfig = [
@@ -16,7 +16,6 @@ $(document).ready(function() {
     let uniqueFieldValues = {};
     const MAX_DROPDOWN_OPTIONS_DISPLAYED = 50;
 
-    // --- Funções Utilitárias (loader, escape, etc.) ---
     function showLoader(message = 'Processing...') {
         let $overlay = $('#loadingOverlay');
         if ($overlay.length === 0 && $('body').length > 0) {
@@ -43,43 +42,52 @@ $(document).ready(function() {
         }
         return stringValue;
     }
-    // --- Fim Funções Utilitárias ---
 
     function renderAlerts() {
         const $alertPanel = $('#alertPanel').empty();
         if (nameConflicts.size) {
             $alertPanel.append(`<div class="alert-badge"><button id="filterNameConflicts" style="background: none; border: none; color: inherit; cursor: pointer; text-decoration: underline;" class="underline"><i class="fas fa-users-slash" style="margin-right: 0.3rem;"></i>Name+Location Conflicts: ${nameConflicts.size}</button></div>`);
         }
-        if (dupLicUsers.size) { // dupLicUsers agora é preenchido por findUsersWithDuplicateLicenses
+        if (dupLicUsers.size) {
             const usersToList = allData.filter(u => dupLicUsers.has(u.Id));
             let listHtml = '';
             const maxPreview = 10;
             usersToList.slice(0, maxPreview).forEach(u => {
-                const licDetails = [];
-                if (u.duplicateLicenseDetails) { // Usar a propriedade adicionada
-                    for (const [licName, count] of Object.entries(u.duplicateLicenseDetails)) {
-                        if (count > 1) licDetails.push(`${licName} (x${count})`);
-                    }
-                }
-                const hasPaid = (u.Licenses || []).some(l => !(l.LicenseName || '').toLowerCase().includes('free') && !(l.LicenseName || '').toLowerCase().includes('trial'));
-                listHtml += `<li>${escapeHtml(u.DisplayName)} (${escapeHtml(u.OfficeLocation || 'N/A')}): Duplicates: ${escapeHtml(licDetails.join(', ') || 'N/A')} — Has Paid: ${hasPaid ? 'Yes' : 'No'}</li>`;
+                const licCount = {}, duplicateLicNames = [];
+                (u.Licenses || []).forEach(l => { licCount[l.LicenseName] = (licCount[l.LicenseName] || 0) + 1; });
+                Object.entries(licCount).forEach(([licName, count]) => count > 1 && duplicateLicNames.push(licName));
+                const hasPaid = (u.Licenses || []).some(l => !(l.LicenseName || '').toLowerCase().includes('free'));
+                listHtml += `<li>${escapeHtml(u.DisplayName)} (${escapeHtml(u.OfficeLocation)}): ${escapeHtml(duplicateLicNames.join(', '))} — Paid: ${hasPaid ? 'Yes' : 'No'}</li>`;
             });
-            if (usersToList.length > maxPreview) {
+             if (usersToList.length > maxPreview) {
                 listHtml += `<li>And ${usersToList.length - maxPreview} more user(s)...</li>`;
             }
-            $alertPanel.append(`<div class="alert-badge"><span><i class="fas fa-copy" style="margin-right: 0.3rem;"></i>Users with Duplicate Licenses: ${dupLicUsers.size}</span> <button class="underline toggle-details" data-target="dupDetails" style="background: none; border: none; color: inherit; cursor: pointer; text-decoration: underline;">Details</button></div><div id="dupDetails" class="alert-details"><ul>${listHtml}</ul></div>`);
+            $alertPanel.append(`<div class="alert-badge"><span><i class="fas fa-copy" style="margin-right: 0.3rem;"></i>Duplicate Licenses: ${dupLicUsers.size}</span> <button class="underline toggle-details" data-target="dupDetails" style="background: none; border: none; color: inherit; cursor: pointer; text-decoration: underline;">Details</button></div><div id="dupDetails" class="alert-details"><ul>${listHtml}</ul></div>`);
         }
 
-        $('#filterNameConflicts').off('click').on('click', function() { /* ... (mantido) ... */ });
-        $('.toggle-details').off('click').on('click', function() { /* ... (mantido) ... */ });
-    }
+        $('#filterNameConflicts').off('click').on('click', function() {
+            if (!table) return;
+            showLoader('Filtering conflicts...');
+            setTimeout(() => {
+                const conflictUserIds = allData.filter(u => nameConflicts.has(nameKey(u))).map(u => u.Id);
+                table.search('').columns().search('');
+                if (conflictUserIds.length > 0) {
+                    table.column(0).search('^(' + conflictUserIds.join('|') + ')$', true, false).draw();
+                } else {
+                    table.column(0).search('').draw();
+                }
+            }, 50);
+        });
 
+        $('.toggle-details').off('click').on('click', function() {
+            const targetId = $(this).data('target');
+            $(`#${targetId}`).toggleClass('show');
+            $(this).text($(`#${targetId}`).hasClass('show') ? 'Hide' : 'Details');
+        });
+    }
 
     function initTable(data) {
         allData = data;
-        // Pré-processar para encontrar duplicatas uma vez no carregamento para o alerta
-        const duplicateInfo = findUsersWithDuplicateLicenses(allData, { identifyOnly: true });
-        dupLicUsers = new Set(duplicateInfo.map(u => u.Id)); // Atualiza o Set global para renderAlerts
 
         if ($('#licenseDatalist').length === 0) { $('body').append('<datalist id="licenseDatalist"></datalist>'); }
         const $licenseDatalist = $('#licenseDatalist').empty();
@@ -101,34 +109,44 @@ $(document).ready(function() {
                 { data: 'JobTitle', title: 'Job Title', visible: true },
                 { data: 'OfficeLocation', title: 'Location', visible: false },
                 { data: 'BusinessPhones', title: 'Phones', visible: false, render: p => Array.isArray(p) ? p.join('; ') : (p || '') },
-                {
-                    data: 'Licenses', title: 'Licenses', visible: true,
-                    render: function(licenses, type, row) {
-                        let displayLicenses = Array.isArray(licenses) ? licenses.map(x => x.LicenseName || '').filter(name => name) : [];
-                        if (row.duplicateLicenseDetails) { // Adiciona indicador visual de duplicatas
-                            const dupIndicator = Object.entries(row.duplicateLicenseDetails)
-                                .filter(([, count]) => count > 1)
-                                .map(([name]) => `<span class="dup-marker" title="Duplicate: ${name}">⚠️</span>`)
-                                .join(' ');
-                            if (dupIndicator) {
-                                return displayLicenses.join(', ') + ' ' + dupIndicator;
-                            }
-                        }
-                        return displayLicenses.join(', ');
-                    }
-                }
+                { data: 'Licenses', title: 'Licenses', visible: true, render: l => Array.isArray(l) ? l.map(x => x.LicenseName || '').filter(name => name).join(', ') : '' }
             ],
             initComplete: function() {
                 const api = this.api();
-                $('#colContainer .col-vis').each(function() { /* ... (mantido) ... */ });
-                $('.col-vis').off('change').on('change', function() { /* ... (mantido) ... */ });
-                if ($('#multiSearchFields .multi-search-row').length > 0) { applyMultiSearch(); }
-                updateAiFeatureStatus();
+                api.columns().every(function(colIdx) {
+                    const column = this;
+                    $(api.table().header()).find('tr:eq(1) th:eq(' + colIdx + ') input')
+                        .off('keyup change clear').on('keyup change clear', function() {
+                            if (column.search() !== this.value) {
+                                column.search(this.value).draw();
+                            }
+                        });
+                });
+
+                $('#colContainer .col-vis').each(function() {
+                    const idx = +$(this).data('col');
+                    try {
+                        if (idx >= 0 && idx < api.columns().nodes().length) {
+                            $(this).prop('checked', api.column(idx).visible());
+                        } else { $(this).prop('disabled', true); }
+                    } catch (e) { console.warn("Error checking column visibility:", idx, e); }
+                });
+                $('.col-vis').off('change').on('change', function() {
+                    const idx = +$(this).data('col');
+                    try {
+                        const col = api.column(idx);
+                        if (col && col.visible) { col.visible(!col.visible()); }
+                        else { console.warn("Column not found for index:", idx); }
+                    } catch (e) { console.warn("Error toggling column visibility:", idx, e); }
+                });
+
+                $('#multiSearchFields .multi-search-row').each(function() { updateSearchFieldUI($(this)); });
+                applyMultiSearch();
             },
             rowCallback: function(row, data) {
                 let classes = '';
                 if (nameConflicts.has(nameKey(data))) classes += ' conflict';
-                if (dupLicUsers.has(data.Id)) classes += ' dup-license'; // Classe para linha toda
+                if (dupLicUsers.has(data.Id)) classes += ' dup-license';
                 if (classes) $(row).addClass(classes.trim());
                 else $(row).removeClass('conflict dup-license');
             },
@@ -140,408 +158,522 @@ $(document).ready(function() {
         $(table.table().node()).on('preDraw.dt', () => showLoader('Updating table...'));
     }
 
-    // --- Lógica de Multi-Busca e Filtros da Tabela (mantida) ---
-    function updateSearchFieldUI($row) { /* ... (mantido como na versão anterior) ... */ }
-    function setupMultiSearch() { /* ... (mantido como na versão anterior) ... */ }
-    function applyMultiSearch() { /* ... (mantido como na versão anterior) ... */ }
-    function _executeMultiSearchLogic() { /* ... (mantido como na versão anterior) ... */ }
-    $('#clearFilters').on('click', () => { /* ... (mantido como na versão anterior) ... */ });
-    // --- Fim Lógica de Multi-Busca ---
+    function updateSearchFieldUI($row) {
+        const selectedColIndex = $row.find('.column-select').val();
+        const columnConfig = searchableColumnsConfig.find(c => c.index == selectedColIndex);
 
+        const $searchInput = $row.find('.search-input');
+        const $customDropdownContainer = $row.find('.custom-dropdown-container');
+        const $customDropdownTextInput = $row.find('.custom-dropdown-text-input');
+        const $customOptionsList = $row.find('.custom-options-list');
+        const $hiddenValueInput = $row.find('.search-value-input'); // CHANGED: from .search-value-select
 
-    // --- Funções de Exportação (mantidas) ---
-    function downloadCsv(csvContent, fileName) { /* ... (mantido) ... */ }
-    $('#exportCsv').on('click', () => { /* ... (mantido) ... */ });
-    $('#exportIssues').on('click', () => { /* ... (mantido, mas pode usar `dupLicUsers` para o relatório) ... */ });
-    // --- Fim Funções de Exportação ---
+        $customDropdownTextInput.off();
+        $customOptionsList.off();
 
+        if (columnConfig && columnConfig.useDropdown) {
+            $searchInput.hide();
+            $customDropdownContainer.show();
+            $customDropdownTextInput.val('');
+            $customDropdownTextInput.attr('placeholder', `Type or select ${columnConfig.title.toLowerCase()}`);
+            $customOptionsList.hide().empty();
 
-    // --- Processamento de Dados Inicial com Web Worker (mantido) ---
-    function processDataWithWorker(rawData) { /* ... (mantido como na versão anterior, uniqueFieldValues será usado pela IA) ... */ }
-    // --- Fim Processamento de Dados Inicial ---
+            // $hiddenValueInput.empty().append(...) is not needed for input type="hidden"
+            $hiddenValueInput.val(''); // Clear the hidden input
+            const allUniqueOptions = uniqueFieldValues[columnConfig.dataProp] || [];
 
+            let filterDebounce;
+            $customDropdownTextInput.on('input', function() {
+                clearTimeout(filterDebounce);
+                const $input = $(this);
+                filterDebounce = setTimeout(() => {
+                    const searchTerm = $input.val().toLowerCase();
+                    $customOptionsList.empty().show();
+                    const filteredOptions = allUniqueOptions.filter(opt => String(opt).toLowerCase().includes(searchTerm));
 
-    // ===========================================================
-    // FUNCIONALIDADE DE IA - RETROCONVERSAÇÃO E FILTRAGEM
-    // ===========================================================
-    const AI_API_KEY_STORAGE_KEY = 'licenseAiApiKey_v1_google_prompt_efficient';
-    const $manageAiApiKeyButton = $('#manageAiApiKeyButton');
-    const $askAiButton = $('#askAiButton');
-    const $aiQuestionInput = $('#aiQuestionInput');
-    const $aiResponseArea = $('#aiResponseArea');
-    const $aiLoadingIndicator = $('#aiLoadingIndicator');
-    const $aiTokenInfo = $('#aiTokenInfo');
-
-    let aiConversationHistory = [];
-    const MAX_CONVERSATION_HISTORY_TURNS = 2; // Reduzido para dar mais espaço ao contexto filtrado
-    const TARGET_MAX_CHARS_FOR_API = 780000; // Alvo ~780k caracteres (Gemini 1.5 Flash tem 1M tokens ~ 3-4M chars)
-
-    function getAiApiKey() { return localStorage.getItem(AI_API_KEY_STORAGE_KEY); }
-
-    function updateAiApiKeyStatusDisplay() {
-        // ... (mantido como na versão anterior, chama updateAiFeatureStatus) ...
-        if (getAiApiKey()) {
-            $manageAiApiKeyButton.text('API IA Config.');
-            $manageAiApiKeyButton.css('background-color', '#28a745');
-            $manageAiApiKeyButton.attr('title', 'Chave da API da IA (Google Gemini) configurada. Clique para alterar ou remover.');
-        } else {
-            $manageAiApiKeyButton.text('Configurar API IA');
-            $manageAiApiKeyButton.css('background-color', ''); 
-            $manageAiApiKeyButton.attr('title', 'Configurar chave da API da IA (Google Gemini) para análise.');
-        }
-        updateAiFeatureStatus(); 
-    }
-
-    function handleApiKeyInputViaPrompt() {
-        // ... (mantido como na versão anterior, chama updateAiApiKeyStatusDisplay) ...
-        const currentKey = getAiApiKey() || "";
-        const newKey = window.prompt("Por favor, insira sua chave de API do Google Gemini:", currentKey);
-
-        if (newKey === null) { 
-        } else if (newKey.trim() === "" && currentKey !== "") {
-            if (confirm("Você tem certeza que deseja remover a chave da API salva?")) {
-                localStorage.removeItem(AI_API_KEY_STORAGE_KEY);
-                alert("Chave da API removida.");
-            }
-        } else if (newKey.trim() !== "") {
-            localStorage.setItem(AI_API_KEY_STORAGE_KEY, newKey.trim());
-            alert("Chave da API da IA (Google Gemini) salva!");
-        }
-        updateAiApiKeyStatusDisplay();
-        return getAiApiKey() !== null && getAiApiKey().trim() !== "";
-    }
-
-    $manageAiApiKeyButton.on('click', function() { handleApiKeyInputViaPrompt(); });
-
-    function estimateChars(text) { return typeof text === 'string' ? text.length : 0; }
-
-    async function updateAiFeatureStatus() {
-        const apiKey = getAiApiKey();
-        const hasData = allData && allData.length > 0;
-
-        if (!apiKey || !hasData) {
-            $askAiButton.prop('disabled', true);
-            $askAiButton.attr('title', !apiKey ? 'Configure a chave da API primeiro.' : 'Carregue os dados primeiro.');
-            $aiTokenInfo.text('');
-            return;
-        }
-
-        // Simulação leve para o status do botão, a verificação completa ocorre ao perguntar
-        const tempQuestionForEstimation = "Resumo geral."; // Pergunta genérica para estimativa
-        const { currentChars, canSend } = await analyzeAndPrepareForAISending(tempQuestionForEstimation, false);
-
-
-        if (!canSend) {
-            $askAiButton.prop('disabled', true);
-            $askAiButton.attr('title', `Os dados base excedem o limite (${Math.round(currentChars/1000)}k > ${Math.round(TARGET_MAX_CHARS_FOR_API/1000)}k chars). A IA pode não funcionar corretamente.`);
-            $aiTokenInfo.text(`AVISO: Dados base (${Math.round(currentChars/1000)}k chars) podem exceder o limite para perguntas complexas.`).css('color', 'orange');
-        } else {
-            $askAiButton.prop('disabled', false);
-            $askAiButton.attr('title', 'Perguntar à IA');
-            $aiTokenInfo.text(`Pronto para IA. Estimativa base: ~${Math.round(currentChars/1000)}k / ${Math.round(TARGET_MAX_CHARS_FOR_API/1000)}k chars.`).css('color', '');
-        }
-    }
-
-    // -------- INÍCIO: Lógica de Análise de Pergunta e Filtragem de Dados --------
-    function findUsersWithDuplicateLicenses(sourceData, options = {}) {
-        const { identifyOnly = false, paidOnly = false } = options;
-        const usersWithDuplicates = [];
-        const paidLicenseKeywords = ['E3', 'E5', 'Premium', 'P1', 'P2', 'Standard', 'Copilot']; // Definir melhor se houver campo específico
-
-        sourceData.forEach(user => {
-            const licenseCounts = {};
-            let hasDuplicate = false;
-            let duplicateDetails = {};
-
-            (user.Licenses || []).forEach(license => {
-                const licenseName = license.LicenseName;
-                if (!licenseName) return;
-
-                let isConsideredPaid = true; // Assume paid unless specified otherwise
-                if (paidOnly) {
-                    isConsideredPaid = paidLicenseKeywords.some(kw => licenseName.toLowerCase().includes(kw.toLowerCase())) &&
-                                       !licenseName.toLowerCase().includes('free') &&
-                                       !licenseName.toLowerCase().includes('trial');
-                }
-
-                if (isConsideredPaid) {
-                    licenseCounts[licenseName] = (licenseCounts[licenseName] || 0) + 1;
-                    if (licenseCounts[licenseName] > 1) {
-                        hasDuplicate = true;
-                        duplicateDetails[licenseName] = licenseCounts[licenseName];
+                    if (filteredOptions.length === 0) {
+                        $customOptionsList.append('<div class="custom-option-item no-results">No results found</div>');
+                    } else {
+                        filteredOptions.slice(0, MAX_DROPDOWN_OPTIONS_DISPLAYED).forEach(opt => {
+                            const $optionEl = $('<div class="custom-option-item"></div>').text(opt).data('value', opt);
+                            $customOptionsList.append($optionEl);
+                        });
+                        if (filteredOptions.length > MAX_DROPDOWN_OPTIONS_DISPLAYED) {
+                             $customOptionsList.append(`<div class="custom-option-item no-results" style="font-style:italic; color: #aaa;">${filteredOptions.length - MAX_DROPDOWN_OPTIONS_DISPLAYED} more options hidden...</div>`);
+                        }
                     }
+                }, 200);
+            });
+
+            $customDropdownTextInput.on('focus', function() {
+                $(this).trigger('input');
+                $customOptionsList.show();
+            });
+
+            $customOptionsList.on('mousedown', '.custom-option-item', function(e) {
+                e.preventDefault();
+                if ($(this).hasClass('no-results')) return;
+
+                const selectedText = $(this).text();
+                const selectedValue = $(this).data('value');
+                console.log('DEBUG: Custom dropdown item clicked. Text:', selectedText, 'Value from data-value:', selectedValue, 'Type of selectedValue:', typeof selectedValue);
+
+                $customDropdownTextInput.val(selectedText);
+                $hiddenValueInput.val(selectedValue).trigger('change'); // CHANGED: $hiddenValueInput
+                $customOptionsList.hide();
+            });
+
+            let blurTimeout;
+            $customDropdownTextInput.on('blur', function() {
+                clearTimeout(blurTimeout);
+                blurTimeout = setTimeout(() => { $customOptionsList.hide(); }, 150);
+            });
+
+        } else {
+            $searchInput.show().val('');
+            $customDropdownContainer.hide();
+            $hiddenValueInput.val('').hide(); // CHANGED: $hiddenValueInput, ensure it's hidden if input text field is shown
+            $searchInput.attr('placeholder', 'Term...');
+        }
+    }
+
+    function setupMultiSearch() {
+        const $container = $('#multiSearchFields');
+        function addSearchField() {
+            const columnOptions = searchableColumnsConfig
+                .map(c => `<option value="${c.index}">${escapeHtml(c.title)}</option>`)
+                .join('');
+            const $row = $(`
+                <div class="multi-search-row">
+                    <select class="column-select">${columnOptions}</select>
+                    <input class="search-input" placeholder="Term..." />
+                    <div class="custom-dropdown-container">
+                        <input type="text" class="custom-dropdown-text-input" autocomplete="off" />
+                        <div class="custom-options-list"></div>
+                    </div>
+                    <input type="hidden" class="search-value-input" /> 
+                    <button class="remove-field" title="Remove filter"><i class="fas fa-trash-alt"></i></button>
+                </div>
+            `);
+            $container.append($row);
+            updateSearchFieldUI($row);
+
+            $row.find('.column-select').on('change', function() {
+                updateSearchFieldUI($row);
+                const selectedColIndex = $row.find('.column-select').val();
+                const columnConfig = searchableColumnsConfig.find(c => c.index == selectedColIndex);
+                if (columnConfig && columnConfig.useDropdown) {
+                    $row.find('.search-value-input').val('').trigger('change'); // CHANGED
+                } else {
+                    $row.find('.search-input').val('').trigger('input');
                 }
             });
 
-            if (hasDuplicate) {
-                if (identifyOnly) {
-                    usersWithDuplicates.push({ Id: user.Id, DisplayName: user.DisplayName, OfficeLocation: user.OfficeLocation, Licenses: user.Licenses, duplicateLicenseDetails: duplicateDetails });
-                } else {
-                    // Para envio à IA, pode-se retornar uma cópia mais leve do usuário
-                    usersWithDuplicates.push({
-                        Id: user.Id,
-                        DisplayName: user.DisplayName,
-                        Email: user.Email,
-                        JobTitle: user.JobTitle,
-                        OfficeLocation: user.OfficeLocation,
-                        Licenses: (user.Licenses || []).map(l => ({ LicenseName: l.LicenseName, SkuId: l.SkuId })), // Manter SkuId pode ser útil
-                        duplicateLicenseDetails: duplicateDetails // Adiciona detalhes das duplicatas
+            $row.find('.search-input').on('input change', applyMultiSearch);
+            $row.find('.search-value-input').on('change', function() { // CHANGED
+                console.log('DEBUG: Hidden input .search-value-input changed. Value:', $(this).val(), 'Applying multi-search...');
+                applyMultiSearch();
+            });
+
+            $row.find('.remove-field').on('click', function() {
+                const $multiSearchRow = $(this).closest('.multi-search-row');
+                $multiSearchRow.find('.custom-dropdown-text-input').off();
+                $multiSearchRow.find('.custom-options-list').off();
+                $multiSearchRow.remove();
+                applyMultiSearch();
+            });
+        }
+
+        $('#addSearchField').off('click').on('click', addSearchField);
+        $('#multiSearchOperator').off('change').on('change', applyMultiSearch);
+
+        if ($container.children().length === 0) {
+            if (allData && allData.length > 0) {
+                addSearchField();
+            } else {
+                $('#searchCriteria').text('No data loaded. Please load a JSON file to start.');
+            }
+        }
+    }
+
+    function applyMultiSearch() {
+        console.log('DEBUG: applyMultiSearch called');
+        clearTimeout(multiSearchDebounceTimer);
+        showLoader('Applying filters...');
+        multiSearchDebounceTimer = setTimeout(_executeMultiSearchLogic, DEBOUNCE_DELAY);
+    }
+
+    function _executeMultiSearchLogic() {
+        console.log('DEBUG: _executeMultiSearchLogic called');
+        const operator = $('#multiSearchOperator').val();
+        const $searchCriteriaText = $('#searchCriteria');
+        if (!table) {
+            $searchCriteriaText.text(allData.length === 0 ? 'No data loaded.' : 'Table not initialized.');
+            hideLoader();
+            return;
+        }
+
+        table.search('');
+        while ($.fn.dataTable.ext.search.length > 0) { $.fn.dataTable.ext.search.pop(); }
+
+        const filters = [];
+        $('#multiSearchFields .multi-search-row').each(function() {
+            const colIndex = $(this).find('.column-select').val();
+            const columnConfig = searchableColumnsConfig.find(c => c.index == colIndex);
+            let searchTerm = '';
+            if (columnConfig) {
+                searchTerm = columnConfig.useDropdown ?
+                    $(this).find('.search-value-input').val() : // CHANGED
+                    $(this).find('.search-input').val().trim();
+                console.log('DEBUG: Inspecting filter field: Column Title=', columnConfig.title, 'Is Dropdown=', columnConfig.useDropdown, 'Search Term from UI=', searchTerm);
+                if (searchTerm) {
+                    filters.push({
+                        col: parseInt(colIndex, 10), term: searchTerm,
+                        dataProp: columnConfig.dataProp, isDropdown: columnConfig.useDropdown
                     });
                 }
             }
         });
-        return usersWithDuplicates;
-    }
+        console.log('DEBUG: Active filters collected:', filters);
 
-    function filterUsersByJobTitleKeyword(sourceData, keyword) {
-        if (!keyword || typeof keyword !== 'string') return sourceData;
-        const lowerKeyword = keyword.toLowerCase();
-        return sourceData.filter(user => user.JobTitle && user.JobTitle.toLowerCase().includes(lowerKeyword));
-    }
-    
-    function filterUsersByLicenseName(sourceData, licenseNameQuery) {
-        if (!licenseNameQuery || typeof licenseNameQuery !== 'string') return sourceData;
-        const lowerLicenseNameQuery = licenseNameQuery.toLowerCase();
-        return sourceData.filter(user =>
-            (user.Licenses || []).some(lic => lic.LicenseName && lic.LicenseName.toLowerCase().includes(lowerLicenseNameQuery))
-        );
-    }
+        let criteriaText = operator === 'AND' ? 'Criteria: All filters (AND)' : 'Criteria: Any filter (OR)';
+        if (filters.length > 0) {
+            criteriaText += ` (${filters.length} active filter(s))`;
+            $.fn.dataTable.ext.search.push(
+                function(settings, apiData, dataIndex) {
+                    if (settings.nTable.id !== table.table().node().id) return true;
+                    const rowData = table.row(dataIndex).data();
+                    if (!rowData) return false;
 
-    async function analyzeQueryAndFilterData(userQuestion) {
-        const lowerQuestion = userQuestion.toLowerCase();
-        let filteredData = null; // Inicia como null, se não houver filtro específico, não será usado diretamente no prompt como "dados filtrados"
-        let analysisNotes = ""; // Notas sobre a análise para a IA
-
-        // Exemplo 1: Licenças Duplicadas
-        if (lowerQuestion.includes("licenç duplicad") || lowerQuestion.includes("usuário com mais de uma licença igual")) {
-            analysisNotes += "A pergunta se refere a licenças duplicadas. ";
-            const paidOnly = lowerQuestion.includes("paga") || lowerQuestion.includes("premium"); // simples heurística
-            filteredData = findUsersWithDuplicateLicenses(allData, { paidOnly });
-            analysisNotes += `Foram encontrados ${filteredData.length} usuários com licenças duplicadas ${paidOnly ? '(considerando apenas pagas)' : ''}. `;
-            if (filteredData.length > 0) {
-                 analysisNotes += `Exemplo de detalhe da primeira duplicata encontrada: ${JSON.stringify(filteredData[0].duplicateLicenseDetails)}. `;
-            }
-        }
-        // Exemplo 2: Cargo Técnico
-        else if (lowerQuestion.includes("cargo técnico") || (lowerQuestion.includes("quantos") && lowerQuestion.includes("técnico"))) {
-            analysisNotes += "A pergunta se refere a usuários com cargo técnico. ";
-            if (uniqueFieldValues.JobTitle && uniqueFieldValues.JobTitle.length > 0) {
-                filteredData = filterUsersByJobTitleKeyword(allData, "técnico"); // Ou usar uma lista mais completa de palavras-chave
-                analysisNotes += `Filtrando por cargos contendo 'técnico', foram encontrados ${filteredData.length} usuários. `;
-            } else {
-                analysisNotes += "Não há informações de 'JobTitle' suficientemente detalhadas ou disponíveis para filtrar por 'técnico' de forma confiável. ";
-                // filteredData permanece null ou allData se a IA precisar dos dados gerais
-            }
-        }
-        // Exemplo 3: Usuários com uma licença específica
-        const licenseMentionMatch = lowerQuestion.match(/usuários com (a licença |licença )?['"]?([^'"?]+)['"]?/);
-        if (!filteredData && licenseMentionMatch && licenseMentionMatch[2]) {
-            const mentionedLicense = licenseMentionMatch[2].trim();
-            analysisNotes += `A pergunta parece buscar usuários com a licença "${mentionedLicense}". `;
-            filteredData = filterUsersByLicenseName(allData, mentionedLicense);
-            analysisNotes += `Foram encontrados ${filteredData.length} usuários com essa licença (ou similar). `;
-        }
-
-
-        // Se nenhum filtro específico foi acionado, filteredData pode ser null.
-        // A IA receberá essa nota e poderá usar estatísticas gerais se filteredData for null/vazio.
-        if (filteredData && filteredData.length === 0 && analysisNotes.includes("Foram encontrados 0 usuários")) {
-           analysisNotes += "Nenhum usuário correspondeu aos critérios de filtragem específicos. ";
-        } else if (!filteredData && analysisNotes === "") {
-            analysisNotes = "Nenhum filtro específico foi aplicado baseado na pergunta. A análise será geral ou baseada em palavras-chave diretas na pergunta. ";
-        }
-
-
-        return {
-            originalQuestion: userQuestion,
-            analyzedQueryNotes: analysisNotes.trim(), // Notas para a IA sobre o que foi filtrado
-            dataForAI: filteredData // Pode ser null se nenhum filtro específico foi aplicado ou se o filtro não retornou resultados
-        };
-    }
-    // -------- FIM: Lógica de Análise de Pergunta e Filtragem de Dados --------
-
-
-    async function analyzeAndPrepareForAISending(userQuestion, isActualSendOperation) {
-        let currentChars = estimateChars(JSON.stringify(aiConversationHistory)) + estimateChars(userQuestion);
-        let contextForAI = "";
-        let systemMessage = `Você é um assistente especialista em análise de licenciamento Microsoft 365.
-Responda à pergunta do usuário baseando-se ESTRITAMENTE nos dados e notas de análise fornecidas.
-Se os "Dados Filtrados Específicos" forem fornecidos, priorize-os.
-Se os dados filtrados estiverem vazios ou não forem fornecidos, use as "Notas da Análise da Pergunta" para entender o contexto e, se necessário, informe que a filtragem não encontrou resultados ou que a pergunta requer uma análise geral das "Estatísticas Agregadas" (se disponíveis).
-NÃO invente dados. Seja conciso e use Markdown. Não inclua saudações/despedidas.`;
-        currentChars += estimateChars(systemMessage);
-
-        // Passo 1: Análise da pergunta e filtragem de dados (CLIENT-SIDE)
-        const { analyzedQueryNotes, dataForAI } = await analyzeQueryAndFilterData(userQuestion);
-
-        contextForAI += `Notas da Análise da Pergunta (cliente): ${analyzedQueryNotes}\n---\n`;
-
-        if (dataForAI !== null) { // Se dataForAI é null, significa que nenhum filtro específico foi aplicado com sucesso
-            if (dataForAI.length > 0) {
-                // Tentar enviar os dados filtrados, mas respeitando o limite de caracteres
-                const jsonDataForAI = JSON.stringify(dataForAI.slice(0, 50)); // Envia uma amostra dos filtrados (até 50), ou todos se < 50
-                const estimatedFilteredDataChars = estimateChars(jsonDataForAI);
-
-                if (currentChars + estimatedFilteredDataChars < TARGET_MAX_CHARS_FOR_API) {
-                    contextForAI += `Dados Filtrados Específicos (amostra de até 50 usuários correspondentes):\n${jsonDataForAI}\n---\n`;
-                    currentChars += estimatedFilteredDataChars;
-                } else {
-                    contextForAI += `Dados Filtrados Específicos: A lista de ${dataForAI.length} usuários filtrados é muito grande para incluir diretamente. A IA deve usar as 'Notas da Análise' e o número de usuários encontrados para responder.\n---\n`;
+                    const logicFn = operator === 'OR' ? filters.some.bind(filters) : filters.every.bind(filters);
+                    return logicFn(filter => {
+                        let cellValue;
+                        if (filter.dataProp === 'Licenses') {
+                            return (rowData.Licenses && Array.isArray(rowData.Licenses)) ?
+                                rowData.Licenses.some(l => (l.LicenseName || '').toLowerCase() === filter.term.toLowerCase()) : false;
+                        } else if (filter.isDropdown) {
+                            cellValue = rowData[filter.dataProp] || '';
+                            return String(cellValue).toLowerCase() === filter.term.toLowerCase();
+                        } else {
+                            cellValue = apiData[filter.col] || '';
+                            return String(cellValue).toLowerCase().includes(filter.term.toLowerCase());
+                        }
+                    });
                 }
-            } else { // dataForAI existe (ou seja, um filtro foi tentado) mas retornou vazio
-                 contextForAI += "Dados Filtrados Específicos: Nenhum usuário encontrado após a filtragem aplicada pelo cliente.\n---\n";
-            }
-        }
+            );
+        } else { criteriaText = 'Criteria: All results (no active filters)'; }
 
-        // Adicionar estatísticas agregadas gerais se houver espaço e nenhum dado filtrado útil
-        if ((dataForAI === null || dataForAI.length === 0) && allData.length > 0) {
-            const totalUsers = allData.length;
-            const licenseMap = new Map();
-            allData.forEach(user => (user.Licenses || []).forEach(lic => licenseMap.set(lic.LicenseName, (licenseMap.get(lic.LicenseName) || 0) + 1)));
-            
-            let aggregatedStats = `Estatísticas Agregadas Gerais (Total de ${totalUsers} usuários no dataset):\n`;
-            aggregatedStats += `- Licenças Únicas Distribuídas: ${licenseMap.size}\n`;
-            const topLicensesOverall = [...licenseMap.entries()].sort(([,a],[,b]) => b-a).slice(0,5).map(([n,c])=>`  - ${n}: ${c} usuários`).join('\n'); // Top 5
-            aggregatedStats += `- Top 5 Licenças (Geral):\n${topLicensesOverall}\n`;
-            // Adicionar mais estatísticas se necessário e couber
-            
-            const estimatedAggregatedChars = estimateChars(aggregatedStats);
-            if (currentChars + estimatedAggregatedChars < TARGET_MAX_CHARS_FOR_API) {
-                contextForAI += aggregatedStats;
-                currentChars += estimatedAggregatedChars;
-            } else {
-                contextForAI += "Estatísticas Agregadas Gerais: Omitidas devido ao limite de tamanho do prompt.\n";
-            }
-        }
-        
-        const canSendData = currentChars < TARGET_MAX_CHARS_FOR_API;
-        if (isActualSendOperation) {
-            $aiTokenInfo.text(`Preparado: ~${Math.round(currentChars/1000)}k / ${Math.round(TARGET_MAX_CHARS_FOR_API/1000)}k chars. ${canSendData ? 'Pronto para envio.' : 'Excede o limite!'}`).css('color', canSendData ? 'green' : 'red');
-        }
-        
-        return {
-            contextForAI,
-            systemMessage,
-            history: aiConversationHistory,
-            canSend: canSendData,
-            currentChars // Retorna para o status do botão
-        };
+        $searchCriteriaText.text(criteriaText);
+        table.draw();
     }
 
+    $('#clearFilters').on('click', () => {
+        showLoader('Clearing filters...');
+        setTimeout(() => {
+            if (table) {
+                $(table.table().header()).find('tr:eq(1) th input').val('');
+                table.search('').columns().search('');
+            }
+            $('#multiSearchFields .multi-search-row').each(function() {
+                $(this).find('.custom-dropdown-text-input').off();
+                $(this).find('.custom-options-list').off();
+            });
+            $('#multiSearchFields').empty();
 
-    $askAiButton.on('click', async function() {
-        let apiKey = getAiApiKey();
-        if (!apiKey) { /* ... (lógica de pedir API key mantida) ... */ return; }
-
-        const userQuestion = $aiQuestionInput.val().trim();
-        if (!userQuestion) { /* ... (lógica de pergunta vazia mantida) ... */ return; }
-        if (!allData || allData.length === 0) { /* ... (lógica de sem dados mantida) ... */ return; }
-
-        $aiLoadingIndicator.removeClass('hidden').text('Analisando pergunta e preparando dados...');
-        $askAiButton.prop('disabled', true);
-        $aiResponseArea.html(`Analisando pergunta e preparando dados... <i class="fas fa-spinner fa-spin"></i>`);
-
-        const { contextForAI, systemMessage, history, canSend } = await analyzeAndPrepareForAISending(userQuestion, true);
-
-        if (!canSend) {
-            $aiResponseArea.text('Os dados preparados para a IA excedem o limite de tamanho. Tente uma pergunta mais simples, filtre mais os dados na tabela ou limpe o histórico da IA (recarregando a página).');
-            $aiLoadingIndicator.addClass('hidden');
-            $askAiButton.prop('disabled', false);
-            updateAiFeatureStatus();
-            return;
-        }
-        
-        $aiLoadingIndicator.text('Enviando para IA...');
-        $aiResponseArea.html(`Enviando para IA (Google Gemini)... <i class="fas fa-spinner fa-spin"></i>`);
-
-        const GEMINI_MODEL_TO_USE = "gemini-1.5-flash-latest";
-        const AI_PROVIDER_ENDPOINT_BASE = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_TO_USE}:generateContent`;
-        const finalEndpoint = `${AI_PROVIDER_ENDPOINT_BASE}?key=${apiKey}`;
-
-        try {
-            const requestHeaders = { 'Content-Type': 'application/json', };
-            let conversationTurnsForAPI = [];
-
-            if (history.length === 0) { // Primeira pergunta da sessão
-                conversationTurnsForAPI.push({ "role": "user", "parts": [{ "text": systemMessage }] });
-                conversationTurnsForAPI.push({ "role": "model", "parts": [{ "text": "Entendido. Estou pronto para ajudar com a análise, usando os dados e notas fornecidas."}] });
+            if (allData && allData.length > 0) {
+                setupMultiSearch();
             } else {
-                conversationTurnsForAPI = [...history];
+                $('#searchCriteria').text('No data loaded.');
             }
-            
-            // O contextForAI já inclui as notas da análise e os dados filtrados (ou info sobre eles)
-            const userTurn = { "role": "user", "parts": [{ "text": `${contextForAI}\n\nPERGUNTA ORIGINAL DO USUÁRIO: ${userQuestion}` }] };
-            conversationTurnsForAPI.push(userTurn);
-            
-            const requestBody = {
-              contents: conversationTurnsForAPI,
-              generationConfig: { "maxOutputTokens": 3072, "temperature": 0.3 } // Aumentado um pouco maxOutputTokens
-            };
+            while ($.fn.dataTable.ext.search.length > 0) { $.fn.dataTable.ext.search.pop(); }
 
-            const response = await fetch(finalEndpoint, { /* ... (fetch e tratamento de erro mantidos) ... */ });
-            const responseBodyText = await response.text(); // Mantido
-            let data;  // Mantido
-            try { data = JSON.parse(responseBodyText); } // Mantido
-            catch (e) { /* ... (tratamento de erro de parse mantido) ... */ } // Mantido
+            if (table) table.draw();
+            else hideLoader();
 
-            if (!response.ok) { /* ... (tratamento de erro da API mantido) ... */ } // Mantido
-
-            let aiTextResponse = "Não foi possível extrair a resposta da IA ou a resposta estava vazia."; // Mantido
-            if (data.candidates && data.candidates[0]) { /* ... (extração da resposta mantida) ... */ } // Mantido
-            
-            aiConversationHistory.push(userTurn);
-            aiConversationHistory.push({ "role": "model", "parts": [{ "text": aiTextResponse }] });
-
-            const maxHistoryItems = (MAX_CONVERSATION_HISTORY_TURNS * 2) + (aiConversationHistory.find(turn => turn.parts[0].text.includes("Você é um assistente especialista")) ? 2 : 0);
-            if (aiConversationHistory.length > maxHistoryItems) {
-                if (aiConversationHistory[0].parts[0].text.includes("Você é um assistente especialista")) {
-                    const systemPromptAndFirstModelResponse = aiConversationHistory.slice(0, 2);
-                    const recentTurns = aiConversationHistory.slice(-((MAX_CONVERSATION_HISTORY_TURNS -1) * 2));
-                    aiConversationHistory = [...systemPromptAndFirstModelResponse, ...recentTurns];
-                } else { 
-                    aiConversationHistory = aiConversationHistory.slice(-(MAX_CONVERSATION_HISTORY_TURNS * 2));
+            $('#alertPanel').empty();
+            const defaultVisibleCols = [1, 2, 3, 6];
+            $('#colContainer .col-vis').each(function() {
+                const idx = +$(this).data('col');
+                const isDefaultVisible = defaultVisibleCols.includes(idx);
+                if (table && idx >= 0 && idx < table.columns().nodes().length) {
+                    try { table.column(idx).visible(isDefaultVisible); }
+                    catch (e) { console.warn("Error resetting column visibility:", idx, e); }
                 }
-            }
-            
-            $aiQuestionInput.val('');
-            function simpleMarkdownToHtml(mdText) { /* ... (mantido) ... */ } // Mantido
-            $aiResponseArea.html(simpleMarkdownToHtml(aiTextResponse));
-
-        } catch (error) { /* ... (tratamento de erro mantido) ... */ }
-        finally {
-            $aiLoadingIndicator.addClass('hidden');
-            $askAiButton.prop('disabled', false);
-            updateAiFeatureStatus();
-        }
+                $(this).prop('checked', isDefaultVisible);
+            });
+             if (!table && !(allData && allData.length > 0)) {
+                 $('#searchCriteria').text('No data loaded. Please load a JSON file to start.');
+             }
+        }, 50);
     });
-   
-    // --- Inicialização ---
-    try {
-        if (typeof userData !== 'undefined' && ( (Array.isArray(userData) && userData.length > 0) || (userData.data && Array.isArray(userData.data) && userData.data.length > 0) ) ) {
-            // ... (lógica de carregamento inicial mantida, chama processDataWithWorker)
-            let dataToProcess = Array.isArray(userData) ? userData : userData.data;
-            if (userData.error || (Array.isArray(dataToProcess) && dataToProcess.length === 0 && !userData.message) ) {
-                 $('#searchCriteria').text(userData.error || 'JSON data is empty or invalid as provided by PowerShell.');
-                 console.error("Error in userData from PowerShell or empty data:", userData);
-                 hideLoader();
-                 updateAiFeatureStatus();
-            } else if (userData.message && Array.isArray(dataToProcess) && dataToProcess.length === 0) {
-                 $('#searchCriteria').text(userData.message);
-                 hideLoader();
-                 updateAiFeatureStatus();
-            }
-            else {
-                processDataWithWorker(dataToProcess); // Isso vai popular allData e uniqueFieldValues
-            }
-        } else if (typeof userData !== 'undefined' && userData.message) {
-             $('#searchCriteria').text(userData.message);
-             hideLoader();
-             updateAiFeatureStatus();
-        } else { /* ... (tratamento de userData não definido mantido) ... */ }
-    } catch (error) { /* ... (tratamento de erro inicial mantido) ... */ }
-    updateAiApiKeyStatusDisplay(); // Chamada inicial
-    // ===========================================================
-    // FIM FUNCIONALIDADE DE IA
-    // ===========================================================
 
-}); // Fim do $(document).ready()
+    function downloadCsv(csvContent, fileName) {
+        const bom = "\uFEFF";
+        const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', fileName);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } else {
+            alert("Your browser does not support direct file downloads.");
+        }
+    }
+
+    $('#exportCsv').on('click', () => {
+        if (!table) { alert('Table not initialized. No data loaded.'); return; }
+        showLoader('Exporting CSV...');
+        setTimeout(() => {
+            const rowsToExport = table.rows({ search: 'applied' }).data().toArray();
+            if (!rowsToExport.length) {
+                hideLoader();
+                alert('No records to export with the current filters.');
+                return;
+            }
+            const visibleColumns = [];
+            table.columns(':visible').every(function() {
+                const columnConfig = table.settings()[0].aoColumns[this.index()];
+                const colTitle = $(table.column(this.index()).header()).text() || columnConfig.title;
+                const dataProp = columnConfig.mData;
+                visibleColumns.push({ title: colTitle, dataProp: dataProp });
+            });
+
+            const headerRow = visibleColumns.map(col => escapeCsvValue(col.title)).join(',');
+            const csvRows = rowsToExport.map(rowData => {
+                return visibleColumns.map(col => {
+                    let cellData = rowData[col.dataProp];
+                    let shouldForceQuotes = false;
+                    if (col.dataProp === 'BusinessPhones') {
+                        cellData = Array.isArray(cellData) ? cellData.join('; ') : (cellData || '');
+                        if (String(cellData).includes(';')) shouldForceQuotes = true;
+                    } else if (col.dataProp === 'Licenses') {
+                        const licensesArray = (rowData.Licenses && Array.isArray(rowData.Licenses)) ?
+                            rowData.Licenses.map(l => l.LicenseName || '').filter(name => name) : [];
+                        cellData = licensesArray.length > 0 ? licensesArray.join('; ') : '';
+                         if (String(cellData).includes(';')) shouldForceQuotes = true;
+                    }
+                    return escapeCsvValue(cellData, shouldForceQuotes || String(cellData).match(/[,"\n\r]/));
+                }).join(',');
+            });
+            const csvContent = [headerRow, ...csvRows].join('\n');
+            downloadCsv(csvContent, 'license_report.csv');
+            hideLoader();
+        }, 50);
+    });
+
+    $('#exportIssues').on('click', () => {
+        if (!allData.length) { alert('No data loaded to generate the issues report.'); return; }
+        showLoader('Generating issues report...');
+        setTimeout(() => {
+            const lines = [];
+            if (nameConflicts.size) {
+                lines.push(['NAME+LOCATION CONFLICTS']);
+                lines.push(['Name', 'Location'].map(h => escapeCsvValue(h)));
+                nameConflicts.forEach(key => lines.push(key.split('|||').map(value => escapeCsvValue(value))));
+                lines.push([]);
+            }
+            if (dupLicUsers.size) {
+                lines.push(['USERS with Duplicate Licenses']);
+                lines.push(['Name', 'Location', 'Duplicate Licenses', 'Has Paid License?'].map(h => escapeCsvValue(h)));
+                allData.filter(user => dupLicUsers.has(user.Id)).forEach(user => {
+                    const licCount = {}, duplicateLicNames = [];
+                    (user.Licenses || []).forEach(l => licCount[l.LicenseName] = (licCount[l.LicenseName] || 0) + 1);
+                    Object.entries(licCount).forEach(([licName, count]) => count > 1 && duplicateLicNames.push(licName));
+                    const joinedDups = duplicateLicNames.join('; ');
+                    const hasPaid = (user.Licenses || []).some(l => !(l.LicenseName || '').toLowerCase().includes('free'));
+                    lines.push([
+                        escapeCsvValue(user.DisplayName), escapeCsvValue(user.OfficeLocation),
+                        escapeCsvValue(joinedDups, true),
+                        escapeCsvValue(hasPaid ? 'Yes' : 'No')
+                    ]);
+                });
+            }
+            if (!lines.length) { lines.push(['No issues detected.']); }
+            const csvContent = lines.map(rowArray => rowArray.join(',')).join('\n');
+            downloadCsv(csvContent, 'issues_report.csv');
+            hideLoader();
+        }, 50);
+    });
+
+    function processDataWithWorker(rawData) {
+        showLoader('Validating and processing data (this may take a moment)...');
+        const workerScript = `
+            const nameKeyInternal = u => \`\${u.DisplayName || ''}|||\${u.OfficeLocation || ''}\`;
+            function validateJsonForWorker(data) {
+                if (!Array.isArray(data)) {
+                    return { error: 'Invalid JSON: Must be an array of objects.', validatedData: [] };
+                }
+                const validatedData = data.map((u, i) => u && typeof u === 'object' ? {
+                    Id: u.Id || \`unknown_\${i}\`,
+                    DisplayName: u.DisplayName || 'Unknown',
+                    OfficeLocation: u.OfficeLocation || 'Unknown',
+                    Email: u.Email || '',
+                    JobTitle: u.JobTitle || 'Unknown',
+                    BusinessPhones: Array.isArray(u.BusinessPhones) ? u.BusinessPhones : (typeof u.BusinessPhones === 'string' ? u.BusinessPhones.split('; ').filter(p => p) : []),
+                    Licenses: Array.isArray(u.Licenses) ? u.Licenses.map(l => ({
+                        LicenseName: l.LicenseName || \`Lic_\${i}_\${Math.random().toString(36).substr(2, 5)}\`,
+                        SkuId: l.SkuId || ''
+                    })).filter(l => l.LicenseName) : []
+                } : null).filter(x => x);
+                return { validatedData };
+            }
+            function findIssuesForWorker(data) {
+                const nameMap = new Map();
+                const dupSet = new Set();
+                const officeLic = new Set([
+                    'Microsoft 365 E3', 'Microsoft 365 E5',
+                    'Microsoft 365 Business Standard', 'Microsoft 365 Business Premium',
+                    'Office 365 E3', 'Office 365 E5'
+                ]);
+                data.forEach(u => {
+                    const k = nameKeyInternal(u);
+                    nameMap.set(k, (nameMap.get(k) || 0) + 1);
+                    const licCount = new Map();
+                    (u.Licenses || []).forEach(l => {
+                        const baseName = (l.LicenseName || '').match(/^(Microsoft 365|Office 365)/)?.[0] ?
+                            (l.LicenseName.match(/^(Microsoft 365 E3|Microsoft 365 E5|Microsoft 365 Business Standard|Microsoft 365 Business Premium|Office 365 E3|Office 365 E5)/)?.[0] || l.LicenseName)
+                            : l.LicenseName;
+                        if (baseName) { licCount.set(baseName, (licCount.get(baseName) || 0) + 1); }
+                    });
+                    if ([...licCount].some(([lic, c]) => officeLic.has(lic) && c > 1)) { dupSet.add(u.Id); }
+                });
+                const conflictingNameKeysArray = [...nameMap].filter(([, count]) => count > 1).map(([key]) => key);
+                return { nameConflictsArray: conflictingNameKeysArray, dupLicUsersArray: Array.from(dupSet) };
+            }
+            function calculateUniqueFieldValuesForWorker(data, config) {
+                const localUniqueFieldValues = {};
+                config.forEach(colConfig => {
+                    if (colConfig.useDropdown) {
+                        if (colConfig.dataProp === 'Licenses') {
+                            const allLicenseObjects = data.flatMap(user => user.Licenses || []).filter(l => l.LicenseName);
+                            localUniqueFieldValues.Licenses = [...new Set(allLicenseObjects.map(l => l.LicenseName))].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+                        } else {
+                            localUniqueFieldValues[colConfig.dataProp] = [...new Set(data.map(user => user[colConfig.dataProp]).filter(value => value && String(value).trim() !== ''))].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+                        }
+                    }
+                });
+                return { uniqueFieldValues: localUniqueFieldValues };
+            }
+            self.onmessage = function(e) {
+                const { rawData, searchableColumnsConfig: workerSearchableColumnsConfig } = e.data;
+                try {
+                    const validationResult = validateJsonForWorker(rawData);
+                    if (validationResult.error) {
+                        self.postMessage({ error: validationResult.error });
+                        return;
+                    }
+                    const validatedData = validationResult.validatedData;
+                    if (validatedData.length === 0) {
+                         self.postMessage({ validatedData: [], nameConflictsArray: [], dupLicUsersArray: [], uniqueFieldValues: {} });
+                         return;
+                    }
+                    const issues = findIssuesForWorker(validatedData);
+                    const uniqueValues = calculateUniqueFieldValuesForWorker(validatedData, workerSearchableColumnsConfig);
+                    self.postMessage({
+                        validatedData: validatedData,
+                        nameConflictsArray: issues.nameConflictsArray,
+                        dupLicUsersArray: issues.dupLicUsersArray,
+                        uniqueFieldValues: uniqueValues.uniqueFieldValues,
+                        error: null
+                    });
+                } catch (err) {
+                    self.postMessage({ error: 'Error in Web Worker: ' + err.message + '\\\\n' + err.stack });
+                } finally {
+                    self.close();
+                }
+            };
+        `;
+        const blob = new Blob([workerScript], { type: 'application/javascript' });
+        const worker = new Worker(URL.createObjectURL(blob));
+
+        worker.onmessage = function(e) {
+            URL.revokeObjectURL(blob);
+            const { validatedData: processedData, nameConflictsArray, dupLicUsersArray, uniqueFieldValues: uFValues, error } = e.data;
+
+            if (error) {
+                hideLoader();
+                alert('Error processing data in Worker: ' + error);
+                console.error("Worker Error:", error);
+                $('#searchCriteria').text('Error loading data.');
+                return;
+            }
+
+            nameConflicts = new Set(nameConflictsArray);
+            dupLicUsers = new Set(dupLicUsersArray);
+            uniqueFieldValues = uFValues;
+
+            if (processedData && processedData.length > 0) {
+                showLoader('Rendering table...');
+                setTimeout(() => {
+                    initTable(processedData);
+                    setupMultiSearch();
+                    $('#searchCriteria').text(`Data loaded (${processedData.length} users). Use filters to refine.`);
+                }, 50);
+            } else {
+                hideLoader();
+                alert('No valid users found in the data. Please check the JSON file.');
+                $('#searchCriteria').text('No valid data loaded.');
+                if (table) { table.clear().draw(); }
+                $('#multiSearchFields').empty();
+                $('#alertPanel').empty();
+            }
+        };
+
+        worker.onerror = function(e) {
+            URL.revokeObjectURL(blob);
+            hideLoader();
+            console.error(`Error in Web Worker: Line ${e.lineno} in ${e.filename}: ${e.message}`);
+            alert('A critical error occurred during data processing. Please check the console.');
+            $('#searchCriteria').text('Critical error loading data.');
+        };
+        worker.postMessage({ rawData: rawData, searchableColumnsConfig: searchableColumnsConfig });
+    }
+
+    try {
+        if (typeof userData !== 'undefined' && Array.isArray(userData)) {
+            processDataWithWorker(userData);
+        } else {
+            $('#jsonFileInput').on('change', function(event) {
+                const file = event.target.files[0];
+                if (file) {
+                    showLoader('Reading JSON file...');
+                    const reader = new FileReader();
+                    reader.onload = function(e_reader) {
+                        try {
+                            const jsonData = JSON.parse(e_reader.target.result);
+                            processDataWithWorker(jsonData);
+                        } catch (err) {
+                            hideLoader();
+                            alert('Error parsing JSON file: ' + err.message);
+                            console.error("JSON Parse Error:", err);
+                            $('#searchCriteria').text('Failed to read JSON.');
+                        }
+                    };
+                    reader.onerror = function() {
+                        hideLoader();
+                        alert('Error reading file.');
+                         $('#searchCriteria').text('Failed to read file.');
+                    };
+                    reader.readAsText(file);
+                }
+            });
+            if ($('#jsonFileInput').length === 0) {
+                 console.warn("Global variable 'userData' not defined and input #jsonFileInput not found. Please add a file input or define 'userData'.");
+                 $('#searchCriteria').html('Please load a user JSON file. <br/> (Global <code>userData</code> variable not found.)');
+            } else {
+                 $('#searchCriteria').text('Please load a user JSON file.');
+            }
+            hideLoader();
+        }
+    } catch (error) {
+        hideLoader();
+        alert('Error initiating data loading: ' + error.message);
+        console.error("Initial loading error:", error);
+        $('#searchCriteria').text('Error loading data.');
+    }
+});
