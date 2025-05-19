@@ -1,24 +1,9 @@
 try {
-    # Tenta conectar-se com as permissões necessárias. A autenticação interativa ocorrerá aqui se não houver uma sessão existente.
-    Connect-MgGraph -Scopes "User.Read.All,Directory.Read.All" -NoWelcome
+    Connect-MgGraph -Scopes User.Read.All -NoWelcome
     Write-Host "Successfully connected to Microsoft Graph." -ForegroundColor Green
-
-    # Obter o token de acesso da sessão atual
-    $context = Get-MgContext
-    if (-not $context) {
-        Write-Error "Failed to get context after connecting to Microsoft Graph. Please ensure you are properly authenticated."
-        exit 1
-    }
-    $accessToken = $context.TokenCredential.GetToken($context.Scopes).Token
-    if (-not $accessToken) {
-        Write-Error "Failed to retrieve access token after connecting to Microsoft Graph."
-        exit 1
-    }
-    Write-Host "Access token retrieved successfully for passing to threads." -ForegroundColor DarkYellow
-
 }
 catch {
-    Write-Error "Failed to connect to Microsoft Graph or retrieve access token: $($_.Exception.Message)"
+    Write-Error "Failed to connect to Microsoft Graph: $($_.Exception.Message)"
     exit 1
 }
 
@@ -66,97 +51,80 @@ $skuIdMap = @{
 }
 
 # Define concurrent task limit
-$throttleLimit = 5
+$throttleLimit = 5 
 $jobs = @()
-$allEntries = [System.Collections.Generic.List[object]]::new() # Use a generic list for better performance with AddRange
+$allEntries = @() # Stores results from all jobs
 
 # Iterate over each SkuID to fetch users
 foreach ($skuId in $skuIdMap.Keys) {
     $skuName = $skuIdMap[$skuId]
-
+    
+    # Throttle job creation
     while (($jobs | Where-Object State -eq 'Running').Count -ge $throttleLimit) {
-        Get-Job -State Completed -HasMoreData $true | Receive-Job -AutoRemoveJob -Wait | ForEach-Object { if ($null -ne $_) { $allEntries.AddRange($_) } }
-        if (($jobs | Where-Object State -eq 'Running').Count -ge $throttleLimit) {
-            Start-Sleep -Milliseconds 200 # Shorter sleep, more responsive job addition
-        }
+        Start-Sleep -Seconds 1
         $jobs = Get-Job # Refresh job list
     }
-    
+
     $jobs += Start-ThreadJob -Name "GetUsers_$($skuName -replace '\W','_')" -ScriptBlock {
-        param($skuIdParam, $skuNameParam, $passedAccessToken) 
-
-        try {
-            Connect-MgGraph -AccessToken $passedAccessToken -NoWelcome
-        }
-        catch {
-            Write-Error "Error connecting to Graph in job GetUsers_$($skuNameParam -replace '\W','_') for SKU '$skuIdParam': $($_.Exception.ToString())"
-            return $null
-        }
-
+        param($skuIdParam, $skuNameParam)
+        
         $mgUserParams = @{
-            Filter           = "assignedLicenses/any(u:u/skuId eq '$($skuIdParam)')" 
-            ConsistencyLevel = 'eventual' 
-            All              = $true       
+            Filter           = "assignedLicenses/any(u:u/skuId eq $($skuIdParam))"
+            ConsistencyLevel = 'eventual' # Necessary for advanced queries on Azure AD
+            All              = $true       # Retrieve all users matching the filter
             Select           = 'id,userPrincipalName,displayName,jobTitle,officeLocation,businessPhones'
         }
-
+        
         try {
             $users = Get-MgUser @mgUserParams -ErrorAction Stop
-            $outputObjects = [System.Collections.Generic.List[PSCustomObject]]::new()
+            $outputObjects = @()
             foreach ($user in $users) {
-                $outputObjects.Add([PSCustomObject]@{
+                $outputObjects += [PSCustomObject]@{
                     Id             = $user.Id
                     Email          = $user.UserPrincipalName
                     DisplayName    = $user.DisplayName
                     JobTitle       = $user.JobTitle
                     OfficeLocation = $user.OfficeLocation
-                    BusinessPhones = if ($user.BusinessPhones) { $user.BusinessPhones } else { @() } # Keep as array for consistency
-                    LicenseName    = $skuNameParam # This will be aggregated later
-                    SkuId          = $skuIdParam   # This will be aggregated later
-                })
+                    BusinessPhones = if ($user.BusinessPhones) { $user.BusinessPhones -join "; " } else { "" }
+                    LicenseName    = $skuNameParam 
+                    SkuId          = $skuIdParam
+                }
             }
             return $outputObjects
         }
         catch {
-            $errorMessage = "Error in job GetUsers_$($skuNameParam -replace '\W','_') for SKU '$skuIdParam' during Get-MgUser: $($_.Exception.ToString())"
-            if ($_.Exception.InnerException) {
-                $errorMessage += " Inner Exception: $($_.Exception.InnerException.ToString())"
-            }
-            Write-Error $errorMessage
-            return $null 
+            Write-Error "Error in job GetUsers_$($skuNameParam -replace '\W','_') for SKU '$skuIdParam': $($_.Exception.ToString())"
+            return $null # Return null on error for this job
         }
-    } -ArgumentList $skuId, $skuName, $accessToken 
-
+    } -ArgumentList $skuId, $skuName
+    
     Write-Host "Task started for license '$skuName'" -ForegroundColor DarkCyan
 }
 
-Write-Host "Waiting for all tasks to complete..." -ForegroundColor Cyan
-while (Get-Job -State Running) {
-    Get-Job -State Completed -HasMoreData $true | Receive-Job -AutoRemoveJob -Wait | ForEach-Object { if ($null -ne $_) { $allEntries.AddRange($_) } }
-    Start-Sleep -Seconds 1
-}
-# Final collection for any remaining completed jobs
-Get-Job -State Completed -HasMoreData $true | Receive-Job -AutoRemoveJob -Wait | ForEach-Object { if ($null -ne $_) { $allEntries.AddRange($_) } }
+Write-Host "Waiting for tasks to complete..." -ForegroundColor Cyan
+$jobs | Wait-Job # Wait for all started jobs to finish
 
-
-# Collect results from completed jobs and log errors
-foreach ($job in $jobs) { # $jobs still holds all job objects
-    if ($job.State -ne 'Completed') {
-        Write-Warning "Job $($job.Name) (ID: $($job.Id)) did not complete as expected. State: $($job.State)."
-        if ($job.Error) { # Check top-level job error stream
-             $job.Error | ForEach-Object { Write-Warning "  Error in Job $($job.Name): $($_.ToString())" }
+# Collect results from completed jobs
+foreach ($job in $jobs) {
+    if ($job.State -eq 'Completed') {
+        $jobResult = Receive-Job -Job $job
+        if ($null -ne $jobResult) {
+            $allEntries += $jobResult
         }
-        if ($job.ChildJobs[0].Error) { # Errors are often on the child job for Start-ThreadJob
-             $job.ChildJobs[0].Error | ForEach-Object { Write-Warning "  Error in ChildJob of $($job.Name): $($_.ToString())" }
+    }
+    else {
+        Write-Warning "Job $($job.Name) (ID: $($job.Id)) did not complete. State: $($job.State)."
+        if ($job.Error.Count -gt 0) {
+            $job.Error | ForEach-Object { Write-Warning "  Error in Job: $($_.Exception.ToString())" }
         }
     }
 }
 
 # Aggregate licenses by user
-$userIndex = @{} 
+$userIndex = @{} # Hashtable to store unique users and their licenses
 if ($allEntries.Count -gt 0) {
     foreach ($entry in $allEntries) {
-        if ($null -ne $entry -and $entry.PSObject.Properties['Id']) { 
+        if ($null -ne $entry -and $entry.PSObject.Properties['Id']) { # Ensure entry is valid and has an Id
             if (-not $userIndex.ContainsKey($entry.Id)) {
                 $userIndex[$entry.Id] = [PSCustomObject]@{
                     Id             = $entry.Id
@@ -164,11 +132,11 @@ if ($allEntries.Count -gt 0) {
                     DisplayName    = $entry.DisplayName
                     JobTitle       = $entry.JobTitle
                     OfficeLocation = $entry.OfficeLocation
-                    # BusinessPhones now an array from Get-MgUser, join for display later if needed, keep as array for JSON
-                    BusinessPhones = $entry.BusinessPhones 
-                    Licenses       = [System.Collections.Generic.List[PSCustomObject]]::new() 
+                    BusinessPhones = $entry.BusinessPhones
+                    Licenses       = [System.Collections.Generic.List[PSCustomObject]]::new() # List to hold multiple licenses
                 }
             }
+            # Add current license to the user's list of licenses
             $userIndex[$entry.Id].Licenses.Add([PSCustomObject]@{
                 LicenseName = $entry.LicenseName
                 SkuId       = $entry.SkuId
@@ -177,29 +145,31 @@ if ($allEntries.Count -gt 0) {
     }
 }
 else {
-    Write-Warning "No entries were collected from jobs. This might be due to errors in all jobs or no users having the queried licenses. Check job error logs above."
+    Write-Warning "No entries were collected from jobs. Check job error logs."
 }
 
-$results = $userIndex.Values 
+$results = $userIndex.Values # Get the collection of user objects
 Write-Host ""
 Write-Host "Total unique users processed: $($results.Count)"
 
+# Convert aggregated data to JSON for the HTML report
 $json = ""
 if ($results.Count -gt 0) {
-    # For BusinessPhones, ensure it's an array of strings for JSON consistency.
-    # The JavaScript side already handles array or string.
-    # $results | ForEach-Object { if ($_.BusinessPhones -is [string]) { $_.BusinessPhones = @($_.BusinessPhones) } }
-    $json = $results | ConvertTo-Json -Depth 5 -Compress 
-    if (-not $json) {
+    $json = $results | ConvertTo-Json -Depth 5 -Compress # Depth 5 should be enough for nested licenses
+    if ($json) {
+        # Write-Host "JSON conversion successful." -ForegroundColor Green # Optional success message
+    }
+    else {
         Write-Warning "JSON conversion produced no output. Using error JSON."
         $json = '{ "error": "Failed to generate JSON from results", "data": [] }'
     }
 }
 else {
     Write-Warning "No results to convert to JSON. JSON will indicate 'no data'."
-    $json = '{ "message": "No user data found or processed. This could be due to errors in data collection jobs or no users having the queried licenses.", "data": [] }'
+    $json = '{ "message": "No user data found or processed.", "data": [] }'
 }
 
+# HTML content with translated strings
 $simpleHtmlContent = @"
 <html lang="en-US">
 <head>
@@ -218,13 +188,13 @@ $simpleHtmlContent = @"
 
 <div id="loadingOverlay" style="display: none;">
   <div class="loader-content">
-    <p id="loaderMessageText">Loading...</p>
+    <p>Loading...</p>
     </div>
 </div>
 
     <script>
         // PowerShell will replace $json with actual user data
-        const userData = $json;
+        const userData = $json; 
     </script>
     <aside>
         <a href="https://github.com/pedr-moura" target="_blank" class="sidebar-link">
@@ -237,7 +207,6 @@ $simpleHtmlContent = @"
     <div class="content-container">
         <header>
             <h1><i class="fas fa-id-card-alt" style="margin-right: 0.5rem;"></i>License Management</h1>
-            <button id="manageAiApiKeyButton" class="button button-blue" style="font-size: 0.8em; padding: 0.5rem 0.8rem; margin-left: auto;">Configurar API da IA</button>
         </header>
         <main>
             <div class="grid-container grid-container-md section-spacing">
@@ -248,7 +217,7 @@ $simpleHtmlContent = @"
                         <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="1" checked /><span class="checkbox-text">Name</span></label>
                         <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="2" checked /><span class="checkbox-text">Email</span></label>
                         <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="3" checked /><span class="checkbox-text">Job Title</span></label>
-                        <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="4" /><span class="checkbox-text">Location</span></label>
+                        <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="4" /><span class="checkbox-text">Location</span></label> 
                         <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="5" /><span class="checkbox-text">Phones</span></label>
                         <label class="checkbox-label"><input type="checkbox" class="checkbox col-vis" data-col="6" checked /><span class="checkbox-text">Licenses</span></label>
                     </div>
@@ -280,21 +249,6 @@ $simpleHtmlContent = @"
                     </div>
                 </div>
             </div>
-
-            <div class="card section-spacing">
-                <h2><i class="fas fa-brain" style="margin-right: 0.5rem;"></i>Análise com Inteligência Artificial</h2>
-                
-                <div id="aiInteractionArea" style="margin-top:1rem;">
-                    <textarea id="aiQuestionInput" class="search-input" placeholder="Faça uma pergunta sobre os dados de licença ou deixe em branco para um resumo geral..." style="width:100%; min-height: 60px; margin-bottom:10px; background-color: #1a202c; color: #e2e8f0;"></textarea>
-                    <button id="askAiButton" class="button button-blue" style="width:auto; padding: 0.5rem 1rem;" disabled title="Configure a API ou carregue dados primeiro."><i class="fas fa-paper-plane" style="margin-right: 0.5rem;"></i> Perguntar à IA</button>
-                    <p id="aiTokenInfo" style="font-size:0.85em; margin-top:8px; min-height: 1.1em; color: #a0aec0;"></p>
-                    <p id="aiLoadingIndicator" class="hidden" style="text-align:left; margin-top:10px; color: #a0aec0;">Analisando com IA...</p>
-                    <div id="aiResponseArea" style="margin-top: 15px; padding:15px; border: 1px solid #4a5568; border-radius:6px; min-height:70px; background-color: #1a202c; color: #cbd5e0; white-space: pre-wrap; word-wrap: break-word;">
-                        Aguardando análise...
-                    </div>
-                </div>
-            </div>
-
             <div class="card">
                 <table id="licenseTable" class="table-container display responsive" style="width:100%">
                     <thead class="table-header">
@@ -319,12 +273,25 @@ $simpleHtmlContent = @"
 "@
 
 # Define output directory and file
-$OutputDirectory = "C:\LicManagement"
-If (-not (Test-Path -Path $OutputDirectory)) {
-    New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
-}
-$OutputFileName = "license_management_report.html"
+$OutputDirectory = "C:\LicManagement" # Standard practice to use variable for path
+$OutputFileName = "license_management_report.html" # English file name
 $ReportHtmlPath = Join-Path -Path $OutputDirectory -ChildPath $OutputFileName
+
+# Create directory if it doesn't exist
+if (-not (Test-Path -Path $OutputDirectory -PathType Container)) {
+    # Write-Host "Directory '$OutputDirectory' not found. Attempting to create..." -ForegroundColor Yellow # Optional
+    try {
+        New-Item -Path $OutputDirectory -ItemType Directory -Force -ErrorAction Stop | Out-Null
+        # Write-Host "Directory '$OutputDirectory' created successfully." -ForegroundColor Green # Optional
+    }
+    catch {
+        Write-Error "Failed to create directory '$OutputDirectory': $($_.Exception.Message)"
+        # Optionally exit or handle error if directory creation is critical
+    }
+}
+else {
+    # Write-Host "Directory '$OutputDirectory' already exists." -ForegroundColor DarkGray # Optional
+}
 
 # Save the HTML file
 try {
@@ -332,7 +299,7 @@ try {
     Write-Host "Report saved to: $ReportHtmlPath" -ForegroundColor Green
 }
 catch {
-    Write-Error "Failed to save the HTML report file: $($_.Exception.Message)"
+    Write-Error "Failed to save the HTML report file: $($_.Exception.Message)" 
 }
 
 # Clean up jobs
