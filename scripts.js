@@ -1,9 +1,9 @@
 $(document).ready(function() {
     let table = null, allData = [], nameConflicts = new Set(), dupLicUsers = new Set();
-    const DEBOUNCE_DELAY = 350; // Milliseconds
+    let userMap = new Map();
+    const DEBOUNCE_DELAY = 350;
     let multiSearchDebounceTimer;
 
-    // Definition of operator types in English
     const operatorTypes = {
         IS: 'is',
         IS_NOT: 'is not',
@@ -15,19 +15,20 @@ $(document).ready(function() {
         { index: 0, title: 'ID', dataProp: 'Id', useDropdown: false },
         { index: 1, title: 'Name', dataProp: 'DisplayName', useDropdown: false },
         { index: 2, title: 'Email', dataProp: 'Email', useDropdown: false },
-        { index: 3, title: 'Job Title', dataProp: 'JobTitle', useDropdown: true },
-        { index: 4, title: 'Location', dataProp: 'OfficeLocation', useDropdown: true },
-        { index: 5, title: 'Phones', dataProp: 'BusinessPhones', useDropdown: false },
-        { index: 6, title: 'Licenses', dataProp: 'Licenses', useDropdown: true }
+        { index: 3, title: 'Job Title', dataProp: 'JobTitle', useDropdown: false },
+        { index: 4, title: 'Manager', dataProp: 'ReportsTo', useDropdown: true },
+        { index: 5, title: 'Total Subs.', dataProp: 'TotalSubordinates', useDropdown: false },
+        { index: 6, title: 'Location', dataProp: 'OfficeLocation', useDropdown: true },
+        { index: 7, title: 'Phones', dataProp: 'BusinessPhones', useDropdown: false },
+        { index: 8, title: 'Licenses', dataProp: 'Licenses', useDropdown: true }
     ];
 
-    let uniqueFieldValues = {}; // To store unique values for dropdown filters
-    const MAX_DROPDOWN_OPTIONS_DISPLAYED = 50; // Max options to show in custom dropdowns
+    let uniqueFieldValues = {};
+    const MAX_DROPDOWN_OPTIONS_DISPLAYED = 50;
 
-    // Function to show a loading overlay
     function showLoader(message = 'Processing...') {
         let $overlay = $('#loadingOverlay');
-        if ($overlay.length === 0 && $('body').length > 0) { // Create overlay if it doesn't exist
+        if ($overlay.length === 0) {
             $('body').append('<div id="loadingOverlay"><div class="loader-content"><p id="loaderMessageText"></p></div></div>');
             $overlay = $('#loadingOverlay');
         }
@@ -35,797 +36,273 @@ $(document).ready(function() {
         $overlay.css('display', 'flex');
     }
 
-    // Function to hide the loading overlay
-    function hideLoader() {
-        $('#loadingOverlay').hide();
-    }
-
-    // Generates a unique key for a user based on DisplayName and OfficeLocation
+    function hideLoader() { $('#loadingOverlay').hide(); }
     const nameKey = u => `${u.DisplayName || ''}|||${u.OfficeLocation || ''}`;
 
-    // Escapes HTML special characters in a string
-    const escapeHtml = s => typeof s === 'string' ? s.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]) : '';
-
-    // Escapes a value for CSV export, quoting if necessary
-    function escapeCsvValue(value, forceQuotesOnSemicolon = false) {
-        if (value == null) return ''; // Handle null or undefined
-        let stringValue = String(value);
-        const regex = forceQuotesOnSemicolon ? /[,"\n\r;]/ : /[,"\n\r]/; // Characters that require quoting
-        if (regex.test(stringValue)) {
-            stringValue = `"${stringValue.replace(/"/g, '""')}"`; // Quote and escape existing quotes
+    function escapeCsvValue(value) {
+        if (value == null) return '';
+        let str = String(value);
+        if (/[,"\n\r]/.test(str)) {
+            str = `"${str.replace(/"/g, '""')}"`;
         }
-        return stringValue;
+        return str;
     }
 
-    // Renders alerts for name conflicts and duplicate licenses
-    function renderAlerts() {
-        const $alertPanel = $('#alertPanel').empty(); // Clear previous alerts
-        if (nameConflicts.size) {
-            $alertPanel.append(`<div class="alert-badge"><button id="filterNameConflicts" style="background: none; border: none; color: inherit; cursor: pointer; text-decoration: underline;" class="underline"><i class="fas fa-users-slash" style="margin-right: 0.3rem;"></i>Name+Location Conflicts: ${nameConflicts.size}</button></div>`);
-        }
-        if (dupLicUsers.size) {
-            const usersToList = allData.filter(u => dupLicUsers.has(u.Id));
-            let listHtml = '';
-            const maxPreview = 10; // Max users to list in the preview
-            usersToList.slice(0, maxPreview).forEach(u => {
-                const licCount = {}, duplicateLicNames = [];
-                (u.Licenses || []).forEach(l => { licCount[l.LicenseName] = (licCount[l.LicenseName] || 0) + 1; });
-                Object.entries(licCount).forEach(([licName, count]) => count > 1 && duplicateLicNames.push(licName));
-                const hasPaid = (u.Licenses || []).some(l => !(l.LicenseName || '').toLowerCase().includes('free'));
-                listHtml += `<li>${escapeHtml(u.DisplayName)} (${escapeHtml(u.OfficeLocation)}): ${escapeHtml(duplicateLicNames.join(', '))} — Paid: ${hasPaid ? 'Yes' : 'No'}</li>`;
-            });
-             if (usersToList.length > maxPreview) {
-                listHtml += `<li>And ${usersToList.length - maxPreview} more user(s)...</li>`;
-            }
-            $alertPanel.append(`<div class="alert-badge"><span><i class="fas fa-copy" style="margin-right: 0.3rem;"></i>Duplicate Licenses: ${dupLicUsers.size}</span> <button class="underline toggle-details" data-target="dupDetails" style="background: none; border: none; color: inherit; cursor: pointer; text-decoration: underline;">Details</button></div><div id="dupDetails" class="alert-details"><ul>${listHtml}</ul></div>`);
-        }
-
-        // Event listener for filtering name conflicts
-        $('#filterNameConflicts').off('click').on('click', function() {
-            if (!table) return;
-            showLoader('Filtering conflicts...');
-            setTimeout(() => {
-                const conflictUserIds = allData.filter(u => nameConflicts.has(nameKey(u))).map(u => u.Id);
-                table.search('').columns().search(''); // Clear existing searches
-                if (conflictUserIds.length > 0) {
-                    // Search for specific user IDs
-                    table.column(0).search('^(' + conflictUserIds.join('|') + ')$', true, false).draw();
-                } else {
-                    table.column(0).search('').draw(); // Clear search if no conflicts (should not happen if button is clicked)
-                }
-            }, 50); // Timeout to allow UI update
-        });
-
-        // Event listener for toggling alert details
-        $('.toggle-details').off('click').on('click', function() {
-            const targetId = $(this).data('target');
-            $(`#${targetId}`).toggleClass('show');
-            $(this).text($(`#${targetId}`).hasClass('show') ? 'Hide' : 'Details');
-        });
-    }
-
-    // Initializes the DataTable
-    function initTable(data) {
-        allData = data; // Store all data for global access
-
-        // Populate datalist for license suggestions (if used by browser)
-        if ($('#licenseDatalist').length === 0) { $('body').append('<datalist id="licenseDatalist"></datalist>'); }
-        const $licenseDatalist = $('#licenseDatalist').empty();
-        if (uniqueFieldValues.Licenses) {
-            uniqueFieldValues.Licenses.forEach(name => { $licenseDatalist.append($('<option>').attr('value', escapeHtml(name))); });
-        }
-
-        // Destroy existing table if it exists, and clean up listeners
-        if (table) {
-            $(table.table().node()).off('preDraw.dt draw.dt'); // Remove previous DataTables event listeners
-            table.destroy();
-            $('#licenseTable').empty(); // Clear table HTML to prevent conflicts
-        }
-
-        table = $('#licenseTable').DataTable({
-            data: allData,
-            deferRender: true, // Improves performance for large datasets
-            pageLength: 25,    // Default number of rows per page
-            orderCellsTop: true, // Enables sorting on header cells
-            columns: [ // Column definitions
-                { data: 'Id', title: 'ID', visible: false }, // Hidden by default
-                { data: 'DisplayName', title: 'Name', visible: true },
-                { data: 'Email', title: 'Email', visible: true },
-                { data: 'JobTitle', title: 'Job Title', visible: true },
-                { data: 'OfficeLocation', title: 'Location', visible: false }, // Hidden by default
-                { data: 'BusinessPhones', title: 'Phones', visible: false, render: p => Array.isArray(p) ? p.join('; ') : (p || '') }, // Hidden by default, format array
-                { data: 'Licenses', title: 'Licenses', visible: true, render: l => Array.isArray(l) ? l.map(x => x.LicenseName || '').filter(name => name).join(', ') : '' } // Format array of license objects
-            ],
-            initComplete: function() { // Called when table is fully initialized
-                const api = this.api();
-                // Logic for individual column text search (if header inputs were used, not primary here)
-                api.columns().every(function(colIdx) {
-                    const column = this;
-                    // Example if you had text inputs in a second header row for DataTables' native search per column
-                    // $(api.table().header()).find('tr:eq(1) th:eq(' + colIdx + ') input')
-                    //     .off('keyup change clear').on('keyup change clear', function() {
-                    //         if (column.search() !== this.value) {
-                    //             column.search(this.value).draw();
-                    //         }
-                    //     });
-                });
-
-                // Set initial visibility of columns based on checkboxes
-                $('#colContainer .col-vis').each(function() {
-                    const idx = +$(this).data('col');
-                    try {
-                        if (idx >= 0 && idx < api.columns().nodes().length) {
-                            $(this).prop('checked', api.column(idx).visible());
-                        } else { $(this).prop('disabled', true); } // Disable checkbox if column index is invalid
-                    } catch (e) { console.warn("Error checking column visibility:", idx, e); }
-                });
-                // Event listener for column visibility checkboxes
-                $('.col-vis').off('change').on('change', function() {
-                    const idx = +$(this).data('col');
-                    try {
-                        const col = api.column(idx);
-                        if (col && col.visible) { col.visible(!col.visible()); }
-                        else { console.warn("Column not found for index:", idx); }
-                    } catch (e) { console.warn("Error toggling column visibility:", idx, e); }
-                });
-
-                // Initialize UI for any pre-existing multi-search fields
-                $('#multiSearchFields .multi-search-row').each(function() { updateSearchFieldUI($(this)); });
-                applyMultiSearch(); // Apply initial multi-search state
-            },
-            rowCallback: function(row, data) { // Called for each row drawn
-                let classes = '';
-                if (nameConflicts.has(nameKey(data))) classes += ' conflict'; // Add class for name conflicts
-                if (dupLicUsers.has(data.Id)) classes += ' dup-license';    // Add class for duplicate licenses
-                if (classes) $(row).addClass(classes.trim());
-                else $(row).removeClass('conflict dup-license'); // Ensure classes are removed if not applicable
-            },
-            drawCallback: function() { // Called after every table draw
-                renderAlerts(); // Update alerts panel
-                hideLoader();   // Hide loader after table is drawn
-            }
-        });
-        // Show loader before drawing the table
-        $(table.table().node()).on('preDraw.dt', () => showLoader('Updating table...'));
-    }
-
-    // Updates the UI of a single multi-search filter row (operators, input type)
-    function updateSearchFieldUI($row) {
-        const selectedColIndex = $row.find('.column-select').val();
-        const columnConfig = searchableColumnsConfig.find(c => c.index == selectedColIndex);
-
-        const $searchInput = $row.find('.search-input'); // Text input for non-dropdown fields
-        const $customDropdownContainer = $row.find('.custom-dropdown-container'); // Container for custom dropdown
-        const $customDropdownTextInput = $row.find('.custom-dropdown-text-input'); // Text input for custom dropdown
-        const $customOptionsList = $row.find('.custom-options-list'); // List of options for custom dropdown
-        const $hiddenValueInput = $row.find('.search-value-input'); // Hidden input to store selected value from custom dropdown
-        const $conditionOperatorSelect = $row.find('.condition-operator-select'); // Operator select (is, is not, etc.)
-
-        $customDropdownTextInput.off(); // Remove previous event listeners
-        $customOptionsList.off();    // Remove previous event listeners
-        $conditionOperatorSelect.empty(); // Clear previous operator options
-
-        if (columnConfig) {
-            if (columnConfig.useDropdown) { // For columns like Licenses, Job Title, Location
-                $searchInput.hide(); // Hide general text input
-                $customDropdownContainer.show(); // Show custom dropdown input
-                $customDropdownTextInput.attr('placeholder', `Select or type ${columnConfig.title.toLowerCase()}`);
-                $customOptionsList.hide().empty();
-
-                // Operators for dropdown/selectable value columns
-                $conditionOperatorSelect.append(`<option value="IS" selected>${operatorTypes.IS}</option>`);
-                $conditionOperatorSelect.append(`<option value="IS_NOT">${operatorTypes.IS_NOT}</option>`);
-
-                const allUniqueOptions = uniqueFieldValues[columnConfig.dataProp] || [];
-                let filterDebounce;
-                // Event listener for typing in the custom dropdown's text input
-                $customDropdownTextInput.on('input', function() {
-                    clearTimeout(filterDebounce);
-                    const $input = $(this);
-                    filterDebounce = setTimeout(() => {
-                        const searchTerm = $input.val().toLowerCase();
-                        $customOptionsList.empty().show(); // Clear and show options list
-                        const filteredOptions = allUniqueOptions.filter(opt => String(opt).toLowerCase().includes(searchTerm));
-
-                        if (filteredOptions.length === 0) {
-                            $customOptionsList.append('<div class="custom-option-item no-results">No results found</div>');
-                        } else {
-                            filteredOptions.slice(0, MAX_DROPDOWN_OPTIONS_DISPLAYED).forEach(opt => {
-                                const $optionEl = $('<div class="custom-option-item"></div>').text(opt).data('value', opt);
-                                $customOptionsList.append($optionEl);
-                            });
-                            if (filteredOptions.length > MAX_DROPDOWN_OPTIONS_DISPLAYED) {
-                                 $customOptionsList.append(`<div class="custom-option-item no-results" style="font-style:italic; color: #aaa;">${filteredOptions.length - MAX_DROPDOWN_OPTIONS_DISPLAYED} more options hidden...</div>`);
-                            }
-                        }
-                    }, 200); // Debounce input
-                });
-
-                // Show options list on focus
-                $customDropdownTextInput.on('focus', function() {
-                    $(this).trigger('input'); // Populate options on focus
-                    $customOptionsList.show();
-                });
-
-                // Handle selection from custom dropdown list
-                $customOptionsList.on('mousedown', '.custom-option-item', function(e) {
-                    e.preventDefault(); // Prevent blur on text input when clicking an option
-                    if ($(this).hasClass('no-results')) return;
-
-                    const selectedText = $(this).text();
-                    const selectedValue = $(this).data('value');
-                    
-                    $customDropdownTextInput.val(selectedText); // Update visible text input
-                    $hiddenValueInput.val(selectedValue).trigger('change'); // Set hidden input and trigger change for applyMultiSearch
-                    $customOptionsList.hide(); // Hide options list
-                });
-
-                // Hide options list on blur (with a delay to allow mousedown on options)
-                let blurTimeout;
-                $customDropdownTextInput.on('blur', function() {
-                    clearTimeout(blurTimeout);
-                    blurTimeout = setTimeout(() => { $customOptionsList.hide(); }, 150);
-                });
-
-            } else { // For free text columns like ID, Name, Email, Phones
-                $searchInput.show(); // Show general text input
-                $customDropdownContainer.hide(); // Hide custom dropdown
-                $hiddenValueInput.val('').hide(); // Ensure hidden input is cleared and hidden
-                $searchInput.attr('placeholder', 'Search term...');
-
-                // Operators for free text columns
-                $conditionOperatorSelect.append(`<option value="CONTAINS" selected>${operatorTypes.CONTAINS}</option>`);
-                $conditionOperatorSelect.append(`<option value="DOES_NOT_CONTAIN">${operatorTypes.DOES_NOT_CONTAIN}</option>`);
-                $conditionOperatorSelect.append(`<option value="IS">${operatorTypes.IS}</option>`);
-                $conditionOperatorSelect.append(`<option value="IS_NOT">${operatorTypes.IS_NOT}</option>`);
-            }
-        } else {
-            // Fallback or error state - hide inputs and operator select
-            $searchInput.hide();
-            $customDropdownContainer.hide();
-            $conditionOperatorSelect.hide();
-        }
-    }
-
-    // Sets up the multi-search functionality (add/remove filter rows)
-    function setupMultiSearch() {
-        const $container = $('#multiSearchFields'); // Container for filter rows
-        
-        // Function to add a new filter row
-        function addSearchField() {
-            const columnOptions = searchableColumnsConfig
-                .map(c => `<option value="${c.index}">${escapeHtml(c.title)}</option>`)
-                .join('');
-
-            // HTML for a new filter row, including the condition operator select
-            const $row = $(`
-                <div class="multi-search-row">
-                    <select class="column-select">${columnOptions}</select>
-                    <select class="condition-operator-select"></select> 
-                    <input class="search-input" placeholder="Search term..." />
-                    <div class="custom-dropdown-container">
-                        <input type="text" class="custom-dropdown-text-input" autocomplete="off" />
-                        <div class="custom-options-list"></div>
-                    </div>
-                    <input type="hidden" class="search-value-input" /> 
-                    <button class="remove-field" title="Remove filter"><i class="fas fa-trash-alt"></i></button>
-                </div>
-            `);
-            $container.append($row);
-            updateSearchFieldUI($row); // Initialize operators and input type for the new row
-
-            // Event listeners for the new row's elements
-            $row.find('.column-select').on('change', function() {
-                updateSearchFieldUI($row); // Update operators and input type based on new column
-                const selectedColConfig = searchableColumnsConfig.find(c => c.index == $(this).val());
-                // Clear previous values when column changes to avoid mismatch
-                if (selectedColConfig) {
-                    if (selectedColConfig.useDropdown) {
-                        $row.find('.custom-dropdown-text-input').val('');
-                        $row.find('.search-value-input').val('').trigger('change'); // Trigger applyMultiSearch
-                    } else {
-                        $row.find('.search-input').val('').trigger('input'); // Trigger applyMultiSearch
-                    }
-                }
-            });
-
-            $row.find('.condition-operator-select').off('change').on('change', applyMultiSearch);
-            $row.find('.search-input').off('input change').on('input change', applyMultiSearch);
-            $row.find('.search-value-input').off('change').on('change', function() { // Hidden input for custom dropdowns
-                applyMultiSearch();
-            });
-
-            // Event listener for removing a filter row
-            $row.find('.remove-field').on('click', function() {
-                const $multiSearchRow = $(this).closest('.multi-search-row');
-                // Clean up event listeners on child elements before removing
-                $multiSearchRow.find('.custom-dropdown-text-input').off();
-                $multiSearchRow.find('.custom-options-list').off();
-                $multiSearchRow.remove();
-                applyMultiSearch(); // Re-apply filters after removal
-                // If all filter rows are removed, add a new one if data exists
-                if ($container.children().length === 0 && allData && allData.length > 0) {
-                     addSearchField();
-                }
-            });
-        }
-
-        $('#addSearchField').off('click').on('click', addSearchField); // "Add Filter" button
-        $('#multiSearchOperator').off('change').on('change', applyMultiSearch); // Global AND/OR operator
-
-        // Add an initial search field if data is present and no fields exist yet
-        if ($container.children().length === 0) {
-            if (allData && allData.length > 0) {
-                addSearchField();
-            } else {
-                $('#searchCriteria').text('No data loaded. Please load a JSON file to start.');
-            }
-        }
-    }
-
-    // Debounced function to apply multi-search filters
-    function applyMultiSearch() {
-        clearTimeout(multiSearchDebounceTimer);
-        showLoader('Applying filters...'); // Consider if loader is too frequent here
-        multiSearchDebounceTimer = setTimeout(_executeMultiSearchLogic, DEBOUNCE_DELAY);
-    }
-
-    // Core logic for applying multi-search filters to the DataTable
-    function _executeMultiSearchLogic() {
-        console.log('DEBUG: _executeMultiSearchLogic called');
-        const globalOperator = $('#multiSearchOperator').val(); // Global AND or OR operator
-        const $searchCriteriaText = $('#searchCriteria');
-        
-        if (!table) { // Ensure table is initialized
-            $searchCriteriaText.text(allData.length === 0 ? 'No data loaded.' : 'Table not initialized.');
-            hideLoader();
-            return;
-        }
-
-        table.search(''); // Clear DataTables' global search
-        while ($.fn.dataTable.ext.search.length > 0) { $.fn.dataTable.ext.search.pop(); } // Clear any custom search functions
-
-        // Collect all active filters from the UI
-        const filters = [];
-        $('#multiSearchFields .multi-search-row').each(function() {
-            const $row = $(this);
-            const colIndex = $row.find('.column-select').val();
-            const columnConfig = searchableColumnsConfig.find(c => c.index == colIndex);
-            const conditionOperator = $row.find('.condition-operator-select').val(); // Get selected operator for this row
-            let searchTerm = '';
-
-            if (columnConfig) {
-                searchTerm = columnConfig.useDropdown ?
-                    $row.find('.search-value-input').val() : // Value from hidden input for dropdowns
-                    $row.find('.search-input').val().trim();    // Value from text input for others
-
-                // Add filter if a search term is present (even empty string for IS/IS_NOT checks)
-                if (searchTerm !== null && searchTerm !== undefined) {
-                     filters.push({
-                        col: parseInt(colIndex, 10), // Column index in DataTable
-                        term: searchTerm,             // Search term
-                        dataProp: columnConfig.dataProp, // Property name in rowData object
-                        isDropdown: columnConfig.useDropdown, // Is this a dropdown-type field?
-                        condition: conditionOperator    // Selected condition (IS, IS_NOT, etc.)
-                    });
-                }
-            }
-        });
-        console.log('DEBUG: Active filters collected:', filters);
-
-        let criteriaText = globalOperator === 'AND' ? 'Criteria: All filters (AND)' : 'Criteria: Any filter (OR)';
-        if (filters.length > 0) {
-            criteriaText += ` (${filters.length} active filter(s))`;
-            // Push a new custom search function to DataTables
-            $.fn.dataTable.ext.search.push(
-                function(settings, apiData, dataIndex) { // apiData is the array of data for the row by DataTables
-                    if (settings.nTable.id !== table.table().node().id) return true; // Ensure correct table context
-                    const rowData = table.row(dataIndex).data(); // Get full data object for the row
-                    if (!rowData) return false;
-
-                    // Determine if 'every' (AND) or 'some' (OR) filter conditions must be met
-                    const logicFn = globalOperator === 'OR' ? filters.some.bind(filters) : filters.every.bind(filters);
-                    
-                    return logicFn(filter => { // Apply each filter
-                        let cellDataString;
-                        // Normalize filter term for comparison, handling null/undefined.
-                        let filterTermString = String(filter.term || '').toLowerCase();
-
-                        if (filter.dataProp === 'Licenses') { // Specific logic for 'Licenses' field
-                            const userLicenses = (rowData.Licenses && Array.isArray(rowData.Licenses)) ?
-                                                 rowData.Licenses.map(l => (l.LicenseName || '').toLowerCase()) : [];
-                            
-                            let licenseMatch = userLicenses.includes(filterTermString);
-
-                            if (filter.condition === 'IS') return licenseMatch;
-                            if (filter.condition === 'IS_NOT') return !licenseMatch;
-                            return false; // Default/fallback if condition is unexpected
-
-                        } else if (filter.isDropdown) { // Logic for other dropdown fields (JobTitle, OfficeLocation)
-                            cellDataString = String(rowData[filter.dataProp] || '').toLowerCase();
-                            
-                            if (filter.condition === 'IS') return cellDataString === filterTermString;
-                            if (filter.condition === 'IS_NOT') return cellDataString !== filterTermString;
-                            return cellDataString === filterTermString; // Default to IS for dropdowns if condition is odd
-
-                        } else { // Logic for free text input fields (ID, Name, Email, Phones)
-                            // For non-dropdown, non-license fields, use apiData (DataTables' internal representation)
-                            cellDataString = String(apiData[filter.col] || '').toLowerCase();
-
-                            if (filter.condition === 'CONTAINS') return cellDataString.includes(filterTermString);
-                            if (filter.condition === 'DOES_NOT_CONTAIN') return !cellDataString.includes(filterTermString);
-                            if (filter.condition === 'IS') return cellDataString === filterTermString;
-                            if (filter.condition === 'IS_NOT') return cellDataString !== filterTermString;
-                            return cellDataString.includes(filterTermString); // Default to CONTAINS for text fields
-                        }
-                    });
-                }
-            );
-        } else { criteriaText = 'Criteria: All results (no active filters)'; }
-
-        $searchCriteriaText.text(criteriaText); // Update criteria display text
-        table.draw(); // Redraw the table to apply filters
-        // hideLoader() is called in table.drawCallback
-    }
-
-    // Event listener for "Clear Filters" button
-    $('#clearFilters').on('click', () => {
-        showLoader('Clearing filters...');
-        setTimeout(() => {
-            if (table) {
-                // $(table.table().header()).find('tr:eq(1) th input').val(''); // Clear individual column filters (if used)
-                table.search('').columns().search(''); // Clear DT's own search states
-            }
-            
-            // Remove all multi-search rows and their listeners
-            $('#multiSearchFields .multi-search-row').each(function() {
-                $(this).find('.custom-dropdown-text-input').off();
-                $(this).find('.custom-options-list').off();
-            });
-            $('#multiSearchFields').empty();
-
-            // Clear custom DataTable search functions
-            while ($.fn.dataTable.ext.search.length > 0) { $.fn.dataTable.ext.search.pop(); }
-
-            // Re-add a single default search field if data exists
-            if (allData && allData.length > 0) {
-                // setupMultiSearch() will be called effectively if it detects an empty container and adds a field
-                 if ($('#multiSearchFields').children().length === 0) {
-                    setupMultiSearch(); // Explicitly call if needed, or ensure addSearchField is called
-                }
-            } else {
-                $('#searchCriteria').text('No data loaded.');
-            }
-            
-            if (table) {
-                table.draw(); // This will trigger hideLoader via drawCallback
-            } else {
-                hideLoader();
-            }
-
-            $('#alertPanel').empty(); // Clear alerts
-            // Reset column visibility to default
-            const defaultVisibleCols = [1, 2, 3, 6]; // Name, Email, Job Title, Licenses
-            $('#colContainer .col-vis').each(function() {
-                const idx = +$(this).data('col');
-                const isDefaultVisible = defaultVisibleCols.includes(idx);
-                if (table && idx >= 0 && idx < table.columns().nodes().length) {
-                    try { table.column(idx).visible(isDefaultVisible); }
-                    catch (e) { console.warn("Error resetting column visibility:", idx, e); }
-                }
-                $(this).prop('checked', isDefaultVisible);
-            });
-             if (!table && !(allData && allData.length > 0)) { // If no table and no data
-                 $('#searchCriteria').text('No data loaded. Please load a JSON file to start.');
-             }
-        }, 50); // Timeout to allow UI update
-    });
-
-    // Function to download content as a CSV file
     function downloadCsv(csvContent, fileName) {
-        const bom = "\uFEFF"; // BOM for UTF-8 Excel compatibility
+        const bom = "\uFEFF";
         const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
-        if (link.download !== undefined) { // Check browser support for download attribute
-            const url = URL.createObjectURL(blob);
-            link.setAttribute('href', url);
-            link.setAttribute('download', fileName);
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click(); // Trigger download
-            document.body.removeChild(link); // Clean up
-            URL.revokeObjectURL(url); // Release object URL
-        } else {
-            alert("Your browser does not support direct file downloads.");
-        }
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', fileName);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     }
 
-    // Event listener for "Export CSV" button
-    $('#exportCsv').on('click', () => {
-        if (!table) { alert('Table not initialized. No data loaded.'); return; }
-        showLoader('Exporting CSV...');
-        setTimeout(() => {
-            const rowsToExport = table.rows({ search: 'applied' }).data().toArray(); // Get filtered data
-            if (!rowsToExport.length) {
-                hideLoader();
-                alert('No records to export with the current filters.');
-                return;
-            }
-            const visibleColumns = [];
-            // Get visible columns in their current display order
-            table.columns(':visible').every(function() {
-                const columnConfig = table.settings()[0].aoColumns[this.index()];
-                const colTitle = $(table.column(this.index()).header()).text() || columnConfig.title || columnConfig.mData;
-                const dataProp = columnConfig.mData;
-                visibleColumns.push({ title: colTitle, dataProp: dataProp });
-            });
+    function renderAlerts() {
+        const $alertPanel = $('#alertPanel').empty();
+        if (nameConflicts.size) $alertPanel.append(`<div class="alert-badge"><i class="fas fa-users-slash"></i><button id="filterNameConflicts" class="underline-button">Name+Location Conflicts: ${nameConflicts.size}</button></div>`);
+        if (dupLicUsers.size) $alertPanel.append(`<div class="alert-badge"><i class="fas fa-copy"></i><span>Duplicate Licenses: ${dupLicUsers.size}</span></div>`);
+        $('#filterNameConflicts').off('click').on('click', function() {
+            if (!table) return;
+            showLoader('Filtering...');
+            setTimeout(() => {
+                const conflictUserIds = allData.filter(u => nameConflicts.has(nameKey(u))).map(u => u.Id);
+                table.search('').columns().search('').column(0).search(conflictUserIds.length ? `^(${conflictUserIds.join('|')})$` : '', true, false).draw();
+            }, 50);
+        });
+    }
 
-            const headerRow = visibleColumns.map(col => escapeCsvValue(col.title)).join(',');
-            const csvRows = rowsToExport.map(rowData => {
-                return visibleColumns.map(col => {
-                    let cellData = rowData[col.dataProp];
-                    let shouldForceQuotes = false; // Flag to force quotes if data contains semicolons (for Excel)
-                    if (col.dataProp === 'BusinessPhones') {
-                        cellData = Array.isArray(cellData) ? cellData.join('; ') : (cellData || '');
-                        if (String(cellData).includes(';')) shouldForceQuotes = true;
-                    } else if (col.dataProp === 'Licenses') {
-                        const licensesArray = (rowData.Licenses && Array.isArray(rowData.Licenses)) ?
-                            rowData.Licenses.map(l => l.LicenseName || '').filter(name => name) : [];
-                        cellData = licensesArray.length > 0 ? licensesArray.join('; ') : '';
-                         if (String(cellData).includes(';')) shouldForceQuotes = true;
-                    }
-                    // Ensure all values that might contain problematic characters (or semicolons) are quoted
-                    return escapeCsvValue(cellData, shouldForceQuotes || String(cellData).match(/[,"\n\r;]/));
-                }).join(',');
+    function initTable(data) {
+        allData = data;
+        userMap.clear();
+        allData.forEach(u => userMap.set(u.Id, u));
+        if (table) { table.destroy(); $('#licenseTable').empty(); }
+
+        table = $('#licenseTable').DataTable({
+            data: allData, deferRender: true, pageLength: 25, orderCellsTop: true,
+            columns: [
+                { data: 'Id', visible: false }, { data: 'DisplayName', title: 'Name' }, { data: 'Email', title: 'Email' },
+                { data: 'JobTitle', title: 'Job Title' }, { data: 'ReportsTo', title: 'Manager' },
+                { 
+                    data: 'TotalSubordinates', title: 'Total Subs.',
+                    render: (data, type, row) => (type === 'display' && data > 0) ? `<a href="#" class="view-hierarchy" data-userid="${row.Id}" title="Export team of ${row.DisplayName}">${data} <i class="fas fa-file-csv"></i></a>` : data
+                },
+                { data: 'OfficeLocation', title: 'Location', visible: false },
+                { data: 'BusinessPhones', title: 'Phones', visible: false, render: p => Array.isArray(p) ? p.join('; ') : (p || '') },
+                { data: 'Licenses', title: 'Licenses', render: l => Array.isArray(l) ? l.map(x => x.LicenseName || '').join(', ') : '' }
+            ],
+            initComplete: function() {
+                const api = this.api();
+                $('#colContainer .col-vis').each(function() { const idx = +$(this).data('col'); if (api.column(idx).length) $(this).prop('checked', api.column(idx).visible()); });
+                $('.col-vis').off('change').on('change', function() { const col = api.column(+$(this).data('col')); if (col.length) col.visible(!col.visible()); });
+                setupMultiSearch(); applyMultiSearch();
+            },
+            rowCallback: (row, data) => { $(row).removeClass('conflict dup-license').addClass(`${nameConflicts.has(nameKey(data)) ? 'conflict' : ''} ${dupLicUsers.has(data.Id) ? 'dup-license' : ''}`.trim()); },
+            drawCallback: () => { renderAlerts(); hideLoader(); }
+        });
+        $(table.table().node()).on('preDraw.dt', () => showLoader('Updating...'));
+    }
+
+    function getAllSubordinates(managerId, localUserMap) {
+        const subordinates = [], manager = localUserMap.get(managerId);
+        if (!manager || !manager.children) return [];
+        const queue = [...manager.children], processed = new Set();
+        while (queue.length > 0) {
+            const userId = queue.shift();
+            if (processed.has(userId)) continue;
+            processed.add(userId);
+            const user = localUserMap.get(userId);
+            if (user) {
+                subordinates.push(user);
+                if (user.children && user.children.length > 0) queue.push(...user.children);
+            }
+        }
+        return subordinates;
+    }
+
+    function setupHierarchyExport() {
+        $('#licenseTable tbody').on('click', 'a.view-hierarchy', function(e) {
+            e.preventDefault();
+            const managerId = $(this).data('userid');
+            const manager = userMap.get(managerId);
+            if (!manager) return;
+
+            showLoader(`Exporting team for ${manager.DisplayName}...`);
+            setTimeout(() => {
+                const subordinatesData = getAllSubordinates(managerId, userMap);
+                if (subordinatesData.length === 0) {
+                    hideLoader();
+                    alert("This manager has no subordinates to export.");
+                    return;
+                }
+
+                const headers = ["Name", "Email", "Job Title", "Direct Manager", "Location", "Licenses", "Top-Level Manager"];
+                
+                const csvRows = subordinatesData.map(user => {
+                    const licenses = (user.Licenses || []).map(l => l.LicenseName).join(', ');
+                    const rowData = [
+                        user.DisplayName, user.Email, user.JobTitle,
+                        user.ReportsTo, user.OfficeLocation, licenses,
+                        manager.DisplayName
+                    ];
+                    return rowData.map(escapeCsvValue).join(',');
+                });
+
+                const csvContent = [headers.join(','), ...csvRows].join('\n');
+                const fileName = `Team_${manager.DisplayName.replace(/\s/g, '_')}.csv`;
+                
+                downloadCsv(csvContent, fileName);
+                hideLoader();
+            }, 50);
+        });
+    }
+
+    function processDataWithWorker(rawData) {
+        showLoader('Processing data and building hierarchy...');
+        const workerScript = `const nameKeyInternal=u=>\`\${u.DisplayName||""}||\${u.OfficeLocation||""}\`;function validateAndNormalize(t){return t.map((t,e)=>t&&"object"==typeof t?{Id:t.Id||\`unknown_\${e}\`,DisplayName:t.DisplayName||"Unknown",OfficeLocation:t.OfficeLocation||"Unknown",Email:t.Email||"",JobTitle:t.JobTitle||"Unknown",ReportsTo:t.ReportsTo||null,BusinessPhones:Array.isArray(t.BusinessPhones)?t.BusinessPhones:[],Licenses:Array.isArray(t.Licenses)?t.Licenses.map(t=>({LicenseName:t.LicenseName||"",SkuId:t.SkuId||""})):[],children:[],TotalSubordinates:0}:null).filter(Boolean)}function findIssues(t){const e=new Map,n=new Set;return t.forEach(t=>{e.set(nameKeyInternal(t),(e.get(nameKeyInternal(t))||0)+1);const r=new Map;(t.Licenses||[]).forEach(t=>{t.LicenseName&&r.set(t.LicenseName,(r.get(t.LicenseName)||0)+1)}),[...r.values()].some(t=>t>1)&&n.add(t.Id)}),{nameConflictsArray:[...e].filter(([t,e])=>e>1).map(([t])=>t),dupLicUsersArray:Array.from(n)}}function countAllSubordinates(t,e){const n=e.get(t);if(!n||!n.children||0===n.children.length)return 0;let r=0;const a=[...n.children],o=new Set;for(;a.length>0;){const t=a.shift();o.has(t)||o.add(t,r++,e.get(t)?.children?.length>0&&a.push(...e.get(t).children))}return r}function buildHierarchyAndCount(t){const e=new Map;t.forEach(t=>e.set(t.DisplayName,t));const n=new Map;t.forEach(t=>n.set(t.Id,t)),t.forEach(t=>{if(t.ReportsTo){const r=e.get(t.ReportsTo);r&&r.children.push(t.Id)}}),t.forEach(t=>{t.TotalSubordinates=countAllSubordinates(t.Id,n)})}function getUniqueFieldValues(t,e){const n={};return e.forEach(e=>{e.useDropdown&&("Licenses"===e.dataProp?n.Licenses=[...new Set(t.flatMap(t=>t.Licenses||[]).map(t=>t.LicenseName).filter(Boolean))].sort():n[e.dataProp]=[...new Set(t.map(t=>t[e.dataProp]).filter(Boolean))].sort())}),n}self.onmessage=function(t){const{rawData:e,searchableColumnsConfig:n}=t.data;try{const t=validateAndNormalize(e),{nameConflictsArray:r,dupLicUsersArray:a}=findIssues(t);buildHierarchyAndCount(t);const o=getUniqueFieldValues(t,n);self.postMessage({validatedData:t,nameConflictsArray:r,dupLicUsersArray:a,uniqueFieldValues:o,error:null})}catch(t){self.postMessage({error:"Error in Web Worker: "+t.message})}finally{self.close()}};`;
+        const blob = new Blob([workerScript], { type: 'application/javascript' });
+        const worker = new Worker(URL.createObjectURL(blob));
+
+        worker.onmessage = function(e) {
+            URL.revokeObjectURL(blob);
+            const { validatedData, nameConflictsArray, dupLicUsersArray, uniqueFieldValues: uFValues, error } = e.data;
+            if (error) { hideLoader(); alert(error); return; }
+            nameConflicts = new Set(nameConflictsArray); dupLicUsers = new Set(dupLicUsersArray); uniqueFieldValues = uFValues;
+            if (validatedData && validatedData.length > 0) {
+                showLoader('Rendering table...');
+                setTimeout(() => { initTable(validatedData); setupHierarchyExport(); }, 50);
+            } else { hideLoader(); alert('No valid user data found.'); }
+        };
+        worker.onerror = function(e) { URL.revokeObjectURL(blob); hideLoader(); console.error(`Error in Web Worker: Line ${e.lineno} in ${e.filename}: ${e.message}`); alert('A critical error occurred during data processing. Please check the console.'); };
+        worker.postMessage({ rawData, searchableColumnsConfig });
+    }
+
+    try {
+        if (typeof userData !== 'undefined' && Array.isArray(userData) && userData.length > 0) {
+            processDataWithWorker(userData);
+        } else { hideLoader(); $('#searchCriteria').text('No user data found to load.'); }
+    } catch (error) { hideLoader(); alert('Error initiating data loading: ' + error.message); console.error("Initial loading error:", error); }
+    
+    function setupMultiSearch() {
+        const $container = $('#multiSearchFields');
+        function addSearchField() {
+            const columnOptions = searchableColumnsConfig.map(c => `<option value="${c.index}">${c.title}</option>`).join('');
+            const $row = $(`<div class="multi-search-row"><select class="form-control column-select">${columnOptions}</select><select class="form-control condition-operator-select"></select><div class="custom-dropdown-container"><input type="text" class="form-control custom-dropdown-text-input" autocomplete="off" /></div><input class="form-control search-input" placeholder="Search term..." /><input type="hidden" class="search-value-input" /><button class="remove-field" title="Remove filter"><i class="fas fa-trash-alt"></i></button></div>`);
+            $container.append($row); updateSearchFieldUI($row);
+            $row.find('.column-select').on('change', function() { updateSearchFieldUI($row); $row.find('.search-input, .custom-dropdown-text-input, .search-value-input').val('').trigger('change'); });
+            $row.find('.condition-operator-select, .search-value-input').on('change', applyMultiSearch);
+            $row.find('.search-input').on('input change', applyMultiSearch);
+            $row.find('.remove-field').on('click', function() { $(this).closest('.multi-search-row').remove(); applyMultiSearch(); });
+        }
+        $('#addSearchField').off('click').on('click', addSearchField);
+        $('#multiSearchOperator').off('change').on('change', applyMultiSearch);
+        if ($container.children().length === 0 && allData.length > 0) addSearchField();
+    }
+    
+    function updateSearchFieldUI($row) {
+        const selIdx = $row.find('.column-select').val(), conf = searchableColumnsConfig.find(c => c.index == selIdx),
+        $si = $row.find('.search-input'), $cdc = $row.find('.custom-dropdown-container'), $cdti = $row.find('.custom-dropdown-text-input'),
+        $col = $row.find('.custom-options-list'), $hvi = $row.find('.search-value-input'), $cos = $row.find('.condition-operator-select');
+        $cdti.off(); $col.off(); $cos.empty();
+        $cdc.hide(); $si.hide();
+        if (conf) {
+            if (conf.useDropdown) {
+                $cdc.show(); $cdti.attr('placeholder', `Select ${conf.title.toLowerCase()}`); $col.hide().empty();
+                $cos.append(`<option value="IS" selected>${operatorTypes.IS}</option><option value="IS_NOT">${operatorTypes.IS_NOT}</option>`);
+                const opts = uniqueFieldValues[conf.dataProp] || []; let fd;
+                $cdti.on('input', function() {
+                    clearTimeout(fd); const $i = $(this); fd = setTimeout(() => {
+                        const st = $i.val().toLowerCase(); $col.empty().show(); const fOpts = opts.filter(o => String(o).toLowerCase().includes(st));
+                        if (fOpts.length === 0) $col.append('<div class="custom-option-item no-results">No results</div>');
+                        else { fOpts.slice(0, 50).forEach(o => $col.append($('<div class="custom-option-item"></div>').text(o).data('value', o))); if (fOpts.length > 50) $col.append(`<div class="custom-option-item no-results">...and ${fOpts.length - 50} more</div>`); }
+                    }, 200);
+                }).on('focus', function() { $(this).trigger('input'); $col.show(); }).on('blur', function() { setTimeout(() => $col.hide(), 150); });
+                $col.on('mousedown', '.custom-option-item', function(e) { e.preventDefault(); if ($(this).hasClass('no-results')) return; $cdti.val($(this).text()); $hvi.val($(this).data('value')).trigger('change'); $col.hide(); });
+            } else {
+                $si.show(); $si.attr('placeholder', 'Search term...');
+                $cos.append(`<option value="CONTAINS" selected>${operatorTypes.CONTAINS}</option><option value="DOES_NOT_CONTAIN">${operatorTypes.DOES_NOT_CONTAIN}</option><option value="IS">${operatorTypes.IS}</option><option value="IS_NOT">${operatorTypes.IS_NOT}</option>`);
+            }
+        }
+    }
+    
+    function applyMultiSearch() { clearTimeout(multiSearchDebounceTimer); multiSearchDebounceTimer = setTimeout(_executeMultiSearchLogic, DEBOUNCE_DELAY); }
+    
+    function _executeMultiSearchLogic() {
+        if (!table) return;
+        const op = $('#multiSearchOperator').val(); while ($.fn.dataTable.ext.search.length > 0) $.fn.dataTable.ext.search.pop();
+        const filters = [];
+        $('#multiSearchFields .multi-search-row').each(function() {
+            const $r = $(this), cIdx = $r.find('.column-select').val(), cConf = searchableColumnsConfig.find(c => c.index == cIdx);
+            if (cConf) { const term = cConf.useDropdown ? $r.find('.search-value-input').val() : $r.find('.search-input').val().trim(); if (term !== '') filters.push({ term, dataProp: cConf.dataProp, isDropdown: cConf.useDropdown, condition: $r.find('.condition-operator-select').val() }); }
+        });
+        if (filters.length > 0) {
+            $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+                if (settings.nTable.id !== table.table().node().id) return true;
+                const rowData = table.row(dataIndex).data(); if (!rowData) return false;
+                return (op === 'OR' ? filters.some.bind(filters) : filters.every.bind(filters))(f => {
+                    const ft = String(f.term || '').toLowerCase(), cd = String(rowData[f.dataProp] || '').toLowerCase();
+                    if (f.dataProp === 'Licenses') { const ul = (rowData.Licenses || []).map(l => (l.LicenseName || '').toLowerCase()), m = ul.includes(ft); return f.condition === 'IS' ? m : !m; }
+                    else if (f.isDropdown) { return f.condition === 'IS' ? cd === ft : cd !== ft; }
+                    else { if (f.condition === 'CONTAINS') return cd.includes(ft); if (f.condition === 'DOES_NOT_CONTAIN') return !cd.includes(ft); if (f.condition === 'IS') return cd === ft; if (f.condition === 'IS_NOT') return cd !== ft; }
+                    return false;
+                });
             });
-            const csvContent = [headerRow, ...csvRows].join('\n');
-            downloadCsv(csvContent, 'license_report.csv');
+        } table.draw();
+    }
+    
+    $('#clearFilters').on('click', () => { if(table) table.search('').columns().search(''); $('#multiSearchFields').empty(); while ($.fn.dataTable.ext.search.length > 0) $.fn.dataTable.ext.search.pop(); if (allData.length > 0) setupMultiSearch(); if(table) table.draw(); });
+    
+    $('#exportCsv').on('click', () => {
+        if (!table) return;
+        showLoader('Exporting...');
+        setTimeout(() => {
+            const rows = table.rows({ search: 'applied' }).data().toArray();
+            if (!rows.length) { hideLoader(); return; }
+            const headers = ["Name","Email","Job Title","Manager","Total Subs.","Location","Phones","Licenses"];
+            const csvRows = rows.map(user => {
+                const licenses = (user.Licenses || []).map(l => l.LicenseName).join(', ');
+                const rowData = [
+                    user.DisplayName, user.Email, user.JobTitle, user.ReportsTo,
+                    user.TotalSubordinates, user.OfficeLocation, 
+                    Array.isArray(user.BusinessPhones) ? user.BusinessPhones.join('; ') : (user.BusinessPhones || ''),
+                    licenses
+                ];
+                return rowData.map(escapeCsvValue).join(',');
+            });
+            downloadCsv([headers.join(','), ...csvRows].join('\n'), 'license_report.csv');
             hideLoader();
-        }, 50); // Timeout for UI update
+        }, 50);
     });
 
-    // Event listener for "Issues Report" button
     $('#exportIssues').on('click', () => {
-        if (!allData.length) { alert('No data loaded to generate the issues report.'); return; }
-        showLoader('Generating issues report...');
+        if (!allData.length) return;
+        showLoader('Generating report...');
         setTimeout(() => {
             const lines = [];
             if (nameConflicts.size) {
                 lines.push(['NAME+LOCATION CONFLICTS']);
-                lines.push(['Name', 'Location'].map(h => escapeCsvValue(h)));
-                nameConflicts.forEach(key => lines.push(key.split('|||').map(value => escapeCsvValue(value))));
-                lines.push([]); // Empty line for separation
+                lines.push(['Name', 'Location']);
+                nameConflicts.forEach(k => lines.push(k.split('|||')));
+                lines.push([]);
             }
             if (dupLicUsers.size) {
-                lines.push(['USERS with Duplicate Licenses']);
-                lines.push(['Name', 'Location', 'Duplicate Licenses', 'Has Paid License?'].map(h => escapeCsvValue(h)));
-                allData.filter(user => dupLicUsers.has(user.Id)).forEach(user => {
-                    const licCount = {}, duplicateLicNames = [];
-                    (user.Licenses || []).forEach(l => licCount[l.LicenseName] = (licCount[l.LicenseName] || 0) + 1);
-                    Object.entries(licCount).forEach(([licName, count]) => count > 1 && duplicateLicNames.push(licName));
-                    const joinedDups = duplicateLicNames.join('; ');
-                    const hasPaid = (user.Licenses || []).some(l => !(l.LicenseName || '').toLowerCase().includes('free'));
-                    lines.push([
-                        escapeCsvValue(user.DisplayName), escapeCsvValue(user.OfficeLocation),
-                        escapeCsvValue(joinedDups, true), // Force quotes due to potential semicolons
-                        escapeCsvValue(hasPaid ? 'Yes' : 'No')
-                    ]);
+                lines.push(['USERS WITH DUPLICATE LICENSES']);
+                lines.push(['Name', 'Location', 'Duplicate Licenses']);
+                allData.filter(u => dupLicUsers.has(u.Id)).forEach(u => {
+                    const c = {}, d = [];
+                    (u.Licenses || []).forEach(li => c[li.LicenseName] = (c[li.LicenseName] || 0) + 1);
+                    Object.entries(c).forEach(([n, ct]) => ct > 1 && d.push(n));
+                    lines.push([u.DisplayName, u.OfficeLocation, d.join('; ')]);
                 });
             }
-            if (!lines.length) { lines.push(['No issues detected.']); } // Message if no issues found
-            const csvContent = lines.map(rowArray => rowArray.join(',')).join('\n');
+            if (!lines.length) { lines.push(['No issues detected.']); }
+            const csvContent = lines.map(row => row.map(escapeCsvValue).join(',')).join('\n');
             downloadCsv(csvContent, 'issues_report.csv');
             hideLoader();
-        }, 50); // Timeout for UI update
+        }, 50);
     });
-
-    // Processes data using a Web Worker for performance
-    function processDataWithWorker(rawData) {
-        showLoader('Validating and processing data (this may take a moment)...');
-        // Web Worker script content
-        const workerScript = `
-            const nameKeyInternal = u => \`\${u.DisplayName || ''}|||\${u.OfficeLocation || ''}\`;
-            // Validates and normalizes user data
-            function validateJsonForWorker(data) {
-                if (!Array.isArray(data)) {
-                    return { error: 'Invalid JSON: Must be an array of objects.', validatedData: [] };
-                }
-                const validatedData = data.map((u, i) => u && typeof u === 'object' ? {
-                    Id: u.Id || \`unknown_\${i}\`,
-                    DisplayName: u.DisplayName || 'Unknown',
-                    OfficeLocation: u.OfficeLocation || 'Unknown',
-                    Email: u.Email || '',
-                    JobTitle: u.JobTitle || 'Unknown',
-                    BusinessPhones: Array.isArray(u.BusinessPhones) ? u.BusinessPhones : (typeof u.BusinessPhones === 'string' ? u.BusinessPhones.split('; ').filter(p => p) : []),
-                    Licenses: Array.isArray(u.Licenses) ? u.Licenses.map(l => ({
-                        LicenseName: l.LicenseName || \`Lic_\${i}_\${Math.random().toString(36).substr(2, 5)}\`, // Generate a temp name if missing
-                        SkuId: l.SkuId || ''
-                    })).filter(l => l.LicenseName) : [] // Ensure licenses have a name
-                } : null).filter(x => x); // Filter out any null entries from bad data
-                return { validatedData };
-            }
-            // Finds issues like name conflicts and duplicate licenses
-            function findIssuesForWorker(data) {
-                const nameMap = new Map(); // For tracking name+location occurrences
-                const dupSet = new Set();  // For tracking users with duplicate licenses
-                const officeLicBases = [ // List of "Office suite" type licenses often considered exclusive
-                    'microsoft 365 e3', 'microsoft 365 e5', 
-                    'office 365 e3', 'office 365 e5',
-                    'microsoft 365 business standard', 'microsoft 365 business premium',
-                ];
-                data.forEach(u => {
-                    const k = nameKeyInternal(u); // Generate name+location key
-                    nameMap.set(k, (nameMap.get(k) || 0) + 1); // Count occurrences
-                    const licCount = new Map(); // Count licenses for current user
-                    (u.Licenses || []).forEach(l => {
-                        const licNameLower = (l.LicenseName || '').toLowerCase();
-                        if (officeLicBases.some(base => licNameLower.includes(base))) {
-                            const primarySuiteName = officeLicBases.find(base => licNameLower.includes(base)) || licNameLower;
-                            licCount.set(primarySuiteName, (licCount.get(primarySuiteName) || 0) + 1);
-                        } else {
-                             if(l.LicenseName) licCount.set(licNameLower, (licCount.get(licNameLower) || 0) + 1);
-                        }
-                    });
-                    // Mark user if any license (especially suite types) is counted more than once
-                    if ([...licCount.values()].some(c => c > 1)) {
-                        dupSet.add(u.Id);
-                    }
-                });
-                // Identify conflicting name+location keys
-                const conflictingNameKeysArray = [...nameMap].filter(([, count]) => count > 1).map(([key]) => key);
-                return { nameConflictsArray: conflictingNameKeysArray, dupLicUsersArray: Array.from(dupSet) };
-            }
-            // Calculates unique values for fields configured to use dropdowns
-            function calculateUniqueFieldValuesForWorker(data, config) {
-                const localUniqueFieldValues = {};
-                config.forEach(colConfig => {
-                    if (colConfig.useDropdown) { // Only for columns configured to use dropdowns
-                        if (colConfig.dataProp === 'Licenses') {
-                            const allLicenseObjects = data.flatMap(user => user.Licenses || []).filter(l => l.LicenseName);
-                            localUniqueFieldValues.Licenses = [...new Set(allLicenseObjects.map(l => l.LicenseName))].sort((a, b) => String(a).toLowerCase().localeCompare(String(b).toLowerCase()));
-                        } else {
-                            // For other dropdown columns like JobTitle, OfficeLocation
-                            localUniqueFieldValues[colConfig.dataProp] = [...new Set(data.map(user => user[colConfig.dataProp]).filter(value => value && String(value).trim() !== ''))].sort((a, b) => String(a).toLowerCase().localeCompare(String(b).toLowerCase()));
-                        }
-                    }
-                });
-                return { uniqueFieldValues: localUniqueFieldValues };
-            }
-            // Web Worker message handler
-            self.onmessage = function(e) {
-                const { rawData, searchableColumnsConfig: workerSearchableColumnsConfig } = e.data;
-                try {
-                    const validationResult = validateJsonForWorker(rawData);
-                    if (validationResult.error) { // Handle validation errors
-                        self.postMessage({ error: validationResult.error });
-                        return;
-                    }
-                    const validatedData = validationResult.validatedData;
-                    if (validatedData.length === 0) { // Handle no valid data
-                         self.postMessage({ validatedData: [], nameConflictsArray: [], dupLicUsersArray: [], uniqueFieldValues: {} });
-                         return;
-                    }
-                    const issues = findIssuesForWorker(validatedData); // Find data issues
-                    const uniqueValues = calculateUniqueFieldValuesForWorker(validatedData, workerSearchableColumnsConfig); // Calculate unique values for filters
-                    // Post processed data back to main thread
-                    self.postMessage({
-                        validatedData: validatedData,
-                        nameConflictsArray: issues.nameConflictsArray,
-                        dupLicUsersArray: issues.dupLicUsersArray,
-                        uniqueFieldValues: uniqueValues.uniqueFieldValues,
-                        error: null // No error
-                    });
-                } catch (err) { // Handle unexpected errors in worker
-                    self.postMessage({ error: 'Error in Web Worker: ' + err.message + '\\\\n' + err.stack });
-                } finally {
-                    self.close(); // Close worker after processing
-                }
-            };
-        `;
-        const blob = new Blob([workerScript], { type: 'application/javascript' });
-        const worker = new Worker(URL.createObjectURL(blob)); // Create worker
-
-        // Handler for messages received from Web Worker
-        worker.onmessage = function(e) {
-            URL.revokeObjectURL(blob); // Clean up blob URL
-            const { validatedData: processedData, nameConflictsArray, dupLicUsersArray, uniqueFieldValues: uFValues, error } = e.data;
-
-            if (error) { // Handle errors from worker
-                hideLoader();
-                alert('Error processing data in Worker: ' + error);
-                console.error("Worker Error:", error);
-                $('#searchCriteria').text('Error loading data.');
-                return;
-            }
-
-            // Store processed data and issues globally
-            nameConflicts = new Set(nameConflictsArray);
-            dupLicUsers = new Set(dupLicUsersArray);
-            uniqueFieldValues = uFValues;
-
-            if (processedData && processedData.length > 0) { // If data is valid and processed
-                showLoader('Rendering table...');
-                setTimeout(() => { // Allow UI to update loader message
-                    initTable(processedData); // Initialize DataTable with processed data
-                    setupMultiSearch();       // Setup multi-search UI
-                    $('#searchCriteria').text(`Data loaded (${processedData.length} users). Use filters to refine.`);
-                    // Note: hideLoader() is called in initTable's drawCallback
-                }, 50);
-            } else { // Handle no valid data after processing
-                hideLoader();
-                alert('No valid users found in the data. Please check the JSON file.');
-                $('#searchCriteria').text('No valid data loaded.');
-                if (table) { table.clear().draw(); } // Clear table if it exists
-                $('#multiSearchFields').empty();     // Clear filter fields
-                $('#alertPanel').empty();            // Clear alerts
-            }
-        };
-
-        // Handler for errors in Web Worker itself
-        worker.onerror = function(e) {
-            URL.revokeObjectURL(blob); // Clean up blob URL
-            hideLoader();
-            console.error(`Error in Web Worker: Line ${e.lineno} in ${e.filename}: ${e.message}`);
-            alert('A critical error occurred during data processing. Please check the console.');
-            $('#searchCriteria').text('Critical error loading data.');
-        };
-        // Post raw data and config to Web Worker for processing
-        worker.postMessage({ rawData: rawData, searchableColumnsConfig: searchableColumnsConfig });
-    }
-
-    // Initial data loading logic (tries to use 'userData' global, then falls back to file input)
-    try {
-        // Check if 'userData' is provided (likely injected by PowerShell script)
-        if (typeof userData !== 'undefined' && Array.isArray(userData) && userData.length > 0) {
-            processDataWithWorker(userData);
-        } else if (typeof userData !== 'undefined' && Array.isArray(userData) && userData.length === 0 && userData.hasOwnProperty('message')) {
-            // Handle case where PowerShell script returns a message for no data
-             hideLoader();
-             $('#searchCriteria').text(userData.message || 'No user data found or processed.');
-        }
-        else { // Fallback for file input if userData is not available or not valid
-            // This part assumes an input#jsonFileInput exists in the HTML if userData is not provided.
-            $('#jsonFileInput').on('change', function(event) { // Event listener for file input
-                const file = event.target.files[0];
-                if (file) {
-                    showLoader('Reading JSON file...');
-                    const reader = new FileReader();
-                    reader.onload = function(e_reader) { // File read successfully
-                        try {
-                            const jsonData = JSON.parse(e_reader.target.result);
-                            processDataWithWorker(jsonData); // Process JSON data
-                        } catch (err) { // Handle JSON parsing errors
-                            hideLoader();
-                            alert('Error parsing JSON file: ' + err.message);
-                            console.error("JSON Parse Error:", err);
-                            $('#searchCriteria').text('Failed to read JSON.');
-                        }
-                    };
-                    reader.onerror = function() { // Handle file reading errors
-                        hideLoader();
-                        alert('Error reading file.');
-                         $('#searchCriteria').text('Failed to read file.');
-                    };
-                    reader.readAsText(file); // Read file as text
-                }
-            });
-            // Display message if no data source is readily available
-            if ($('#jsonFileInput').length === 0 && (typeof userData === 'undefined' || !Array.isArray(userData))) {
-                 console.warn("Global variable 'userData' not defined or empty and input #jsonFileInput not found.");
-                 $('#searchCriteria').html('Please load a user JSON file. <br/> (Global <code>userData</code> variable not found or empty).');
-            } else if (typeof userData !== 'undefined' && Array.isArray(userData) && userData.length === 0 && !userData.hasOwnProperty('message')) {
-                 // If userData is an empty array without a message from PowerShell
-                 $('#searchCriteria').text('No user data provided by the global userData variable.');
-            }
-            // Hide loader if no immediate data processing starts (e.g., waiting for file input)
-            if (typeof userData === 'undefined' || (Array.isArray(userData) && userData.length === 0 && !userData.hasOwnProperty('message'))) {
-                 hideLoader();
-            }
-        }
-    } catch (error) { // Handle errors during initial loading setup
-        hideLoader();
-        alert('Error initiating data loading: ' + error.message);
-        console.error("Initial loading error:", error);
-        $('#searchCriteria').text('Error loading data.');
-    }
 });
