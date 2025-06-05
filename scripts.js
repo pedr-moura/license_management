@@ -64,14 +64,23 @@ $(document).ready(function() {
 
     function renderAlerts() {
         const $alertPanel = $('#alertPanel').empty();
-        if (nameConflicts.size) $alertPanel.append(`<div class="alert-badge"><i class="fas fa-users-slash"></i><button id="filterNameConflicts" class="underline-button">Name+Location Conflicts: ${nameConflicts.size}</button></div>`);
-        if (dupLicUsers.size) $alertPanel.append(`<div class="alert-badge"><i class="fas fa-copy"></i><span>Duplicate Licenses: ${dupLicUsers.size}</span></div>`);
+        if (nameConflicts.size) {
+            $alertPanel.append(`<div class="alert-badge"><i class="fas fa-users-slash"></i><button id="filterNameConflicts" class="underline-button">Name+Location Conflicts: ${nameConflicts.size}</button></div>`);
+        }
+        if (dupLicUsers.size) {
+            $alertPanel.append(`<div class="alert-badge"><i class="fas fa-copy"></i><span>Duplicate Licenses: ${dupLicUsers.size}</span></div>`);
+        }
+        
         $('#filterNameConflicts').off('click').on('click', function() {
             if (!table) return;
             showLoader('Filtering...');
             setTimeout(() => {
                 const conflictUserIds = allData.filter(u => nameConflicts.has(nameKey(u))).map(u => u.Id);
-                table.search('').columns().search('').column(0).search(conflictUserIds.length ? `^(${conflictUserIds.join('|')})$` : '', true, false).draw();
+                table.search('').columns().search('').column(0).search(
+                    conflictUserIds.length ? `^(${conflictUserIds.join('|')})$` : '', 
+                    true, 
+                    false
+                ).draw();
             }, 50);
         });
     }
@@ -208,20 +217,28 @@ $(document).ready(function() {
         $si = $row.find('.search-input'), $cdc = $row.find('.custom-dropdown-container'), $cdti = $row.find('.custom-dropdown-text-input'),
         $col = $row.find('.custom-options-list'), $hvi = $row.find('.search-value-input'), $cos = $row.find('.condition-operator-select');
         $cdti.off(); $col.off(); $cos.empty();
-        $cdc.hide(); $si.hide();
+        $cdc.hide().find('.custom-options-list').remove();
+        $si.hide();
         if (conf) {
             if (conf.useDropdown) {
-                $cdc.show(); $cdti.attr('placeholder', `Select ${conf.title.toLowerCase()}`); $col.hide().empty();
+                $cdc.show();
+                if($cdc.find('.custom-options-list').length === 0) {
+                     $cdc.append('<div class="custom-options-list"></div>');
+                }
+                $cdti.attr('placeholder', `Select ${conf.title.toLowerCase()}`);
                 $cos.append(`<option value="IS" selected>${operatorTypes.IS}</option><option value="IS_NOT">${operatorTypes.IS_NOT}</option>`);
                 const opts = uniqueFieldValues[conf.dataProp] || []; let fd;
                 $cdti.on('input', function() {
                     clearTimeout(fd); const $i = $(this); fd = setTimeout(() => {
-                        const st = $i.val().toLowerCase(); $col.empty().show(); const fOpts = opts.filter(o => String(o).toLowerCase().includes(st));
-                        if (fOpts.length === 0) $col.append('<div class="custom-option-item no-results">No results</div>');
-                        else { fOpts.slice(0, 50).forEach(o => $col.append($('<div class="custom-option-item"></div>').text(o).data('value', o))); if (fOpts.length > 50) $col.append(`<div class="custom-option-item no-results">...and ${fOpts.length - 50} more</div>`); }
+                        const st = $i.val().toLowerCase(); 
+                        const $list = $i.next('.custom-options-list');
+                        $list.empty().show(); 
+                        const fOpts = opts.filter(o => String(o).toLowerCase().includes(st));
+                        if (fOpts.length === 0) $list.append('<div class="custom-option-item no-results">No results</div>');
+                        else { fOpts.slice(0, 50).forEach(o => $list.append($('<div class="custom-option-item"></div>').text(o).data('value', o))); if (fOpts.length > 50) $list.append(`<div class="custom-option-item no-results">...and ${fOpts.length - 50} more</div>`); }
                     }, 200);
-                }).on('focus', function() { $(this).trigger('input'); $col.show(); }).on('blur', function() { setTimeout(() => $col.hide(), 150); });
-                $col.on('mousedown', '.custom-option-item', function(e) { e.preventDefault(); if ($(this).hasClass('no-results')) return; $cdti.val($(this).text()); $hvi.val($(this).data('value')).trigger('change'); $col.hide(); });
+                }).on('focus', function() { $(this).trigger('input'); }).on('blur', function() { setTimeout(() => $(this).next('.custom-options-list').hide(), 150); });
+                $cdc.on('mousedown', '.custom-option-item', function(e) { e.preventDefault(); if ($(this).hasClass('no-results')) return; $cdti.val($(this).text()); $hvi.val($(this).data('value')).trigger('change'); $(this).parent().hide(); });
             } else {
                 $si.show(); $si.attr('placeholder', 'Search term...');
                 $cos.append(`<option value="CONTAINS" selected>${operatorTypes.CONTAINS}</option><option value="DOES_NOT_CONTAIN">${operatorTypes.DOES_NOT_CONTAIN}</option><option value="IS">${operatorTypes.IS}</option><option value="IS_NOT">${operatorTypes.IS_NOT}</option>`);
