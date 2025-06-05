@@ -296,27 +296,70 @@ $(document).ready(function() {
     });
 
     $('#exportIssues').on('click', () => {
-        if (!allData.length) return;
-        showLoader('Generating report...');
+        if (!allData.length) {
+            alert('No data loaded to generate an issues report.');
+            return;
+        }
+        showLoader('Generating issues report...');
+        
         setTimeout(() => {
             const lines = [];
-            if (nameConflicts.size) {
+
+            if (nameConflicts.size > 0) {
                 lines.push(['NAME+LOCATION CONFLICTS']);
-                lines.push(['Name', 'Location']);
-                nameConflicts.forEach(k => lines.push(k.split('|||')));
+                const conflictHeaders = ['Name', 'Email', 'Job Title', 'Location', 'Manager'];
+                lines.push(conflictHeaders);
+
+                const conflictingUsers = allData.filter(user => nameConflicts.has(nameKey(user)));
+                conflictingUsers.sort((a, b) => nameKey(a).localeCompare(nameKey(b)));
+
+                conflictingUsers.forEach(user => {
+                    const rowData = [
+                        user.DisplayName,
+                        user.Email,
+                        user.JobTitle,
+                        user.OfficeLocation,
+                        user.ReportsTo || 'N/A'
+                    ];
+                    lines.push(rowData);
+                });
                 lines.push([]);
             }
-            if (dupLicUsers.size) {
+
+            if (dupLicUsers.size > 0) {
                 lines.push(['USERS WITH DUPLICATE LICENSES']);
-                lines.push(['Name', 'Location', 'Duplicate Licenses']);
-                allData.filter(u => dupLicUsers.has(u.Id)).forEach(u => {
-                    const c = {}, d = [];
-                    (u.Licenses || []).forEach(li => c[li.LicenseName] = (c[li.LicenseName] || 0) + 1);
-                    Object.entries(c).forEach(([n, ct]) => ct > 1 && d.push(n));
-                    lines.push([u.DisplayName, u.OfficeLocation, d.join('; ')]);
+                const dupHeaders = ['Name', 'Email', 'Job Title', 'Location', 'Duplicate Licenses'];
+                lines.push(dupHeaders);
+
+                const usersWithDupLicenses = allData.filter(u => dupLicUsers.has(u.Id));
+
+                usersWithDupLicenses.forEach(user => {
+                    const licCount = {}, duplicates = [];
+                    (user.Licenses || []).forEach(lic => {
+                        licCount[lic.LicenseName] = (licCount[lic.LicenseName] || 0) + 1;
+                    });
+                    Object.entries(licCount).forEach(([name, count]) => {
+                        if (count > 1) {
+                            duplicates.push(`${name} (x${count})`);
+                        }
+                    });
+                    
+                    const rowData = [
+                        user.DisplayName,
+                        user.Email,
+                        user.JobTitle,
+                        user.OfficeLocation,
+                        duplicates.join('; ')
+                    ];
+                    lines.push(rowData);
                 });
+                lines.push([]);
             }
-            if (!lines.length) { lines.push(['No issues detected.']); }
+
+            if (lines.length === 0) {
+                lines.push(['No issues detected.']);
+            }
+
             const csvContent = lines.map(row => row.map(escapeCsvValue).join(',')).join('\n');
             downloadCsv(csvContent, 'issues_report.csv');
             hideLoader();
